@@ -1,5 +1,7 @@
 # ThermalAnalysis
 
+A C++ library for analyzing thermal profiles.
+
 ## Description
 
 ## Building and Installing
