@@ -76,8 +76,9 @@ install(EXPORT ${PROJECT_NAME}Targets
 )
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
 "include(CMakeFindDependencyMacro)
-find_dependency(Boost)
-find_dependency( Eigen3 )
+find_dependency( Boost )
+find_dependency( libField )
+find_dependency( BoostUnitDefinitions )
 include(\${CMAKE_CURRENT_LIST_DIR}/${PROJECT_NAME}Targets.cmake)
 "
   )
