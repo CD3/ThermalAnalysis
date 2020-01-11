@@ -1,0 +1,20 @@
+@startuml
+class ThermalProfile {
+Field<1,Real> Tvst
+q<t::kelvin> verOffset
+q<t::dimless> verScale
+q<t::second> horOffset
+q<t::dimless> horScale
+
+q<t::K> operator()( q<t::s> t)
+}
+
+class LinearCombinationBuilder {
+Field<1,Real> profile;
+vector<pair<>> scalesAndArrivalTimes;
+
+void add(scale,arrivalTime);
+void build(Field<1,Real>&);
+}
+
+@enduml
