@@ -24,18 +24,18 @@ pip3 install conan --user
 ```
 The `--user` option will cause Conan will be installed in a subdirectory named
 `.local/` under your users home directory. To run `conan` like a regular command
-you need to add '${HOME}/.local/bin' to your `PATH` variable.
-Add the following line,
+you need to add `${HOME}/.local/bin` to your `PATH` variable.
+Add the following lines,
 ```
-PATH="${PATH}/${HOME}/.local/bin"
+PATH="${PATH}:${HOME}/.local/bin"
 export PATH
 ```
-to the end of your `.bashrc` file. It should be located in your home directory
+to the end of your `.bashrc` file (Note the **double** quotes and the **colon**). It should be located in your home directory
 (it will be hidden since it starts with a '.'), and it is OK to create it if it
 doesn't.  For example, if you use `vim`,
 ```
 $ vim ~/.bashrc
-# add the line above and save
+# add the lines above and save
 ```
 You will need to open a new terminal for the change to take effect. After
 that, you should be able to run `conan`
@@ -90,21 +90,23 @@ Adding it to your `PATH` just makes it available as a command.
 You need to add Dr. Clark's Conan package repository to download the the `ThermalAnalysis` dependencies.
 ```
 $ conan remote add cd3 https://api.bintray.com/conan/cd3/conan-devel
-Username for 'http://fermi.fhsu.edu:81':
-Password for 'http://fermi.fhsu.edu:81':
 ```
 
 Now download this repository
 ```
-$ git install http://fermi.fhsu.edu:81/CD3/ThermalAnalysis
+$ git clone http://fermi.fhsu.edu:81/CD3/ThermalAnalysis
+Username for 'http://fermi.fhsu.edu:81':
+Password for 'http://fermi.fhsu.edu:81':
 ```
 You will have to enter your fermi username and password.
 
-Now you can configure and build. `ThermalAnalysis` uses cmake, so first create a `build/`
+### Building `ThermalAnalysis`
+
+Now you can configure and build. `ThermalAnalysis` uses CMake, so first create a `build/`
 directory to compile the library in. Go into this directory and use conan to download, build,
 and install the dependencies. Conan will create a script named `activate.sh` that contains all
 of the information needed for CMake to use the packages installed by Conan (in fact, we use
-conan to install CMake because the version currently available in the Ubuntu repository is too old)
+conan to install CMake because the version currently available in the Ubuntu repository is too old).
 To setup your environment to run CMake, you need to source the `activate.sh` script.
 You can then run `cmake` to configure the build, and then again to compile the build.
 To do all of this, run the following commands.
