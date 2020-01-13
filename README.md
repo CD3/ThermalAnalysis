@@ -125,3 +125,14 @@ If everything went well, you should see a directory named `testBin/` that contai
 (conanenv) $ ./testBin/ThermalAnalysis_CatchTests
 ```
 Congratulations! Have fun.
+
+## Dependencies
+
+`TheramlAnalysis` uses several other libraries, mostly written by Dr. Clark, with varying degrees of documentation. You can
+consult the README and unit tests for each library for information on how to use the library.
+
+- libField https://github.com/CD3/libField
+- libInterpolate https://github.com/CD3/libInterpolate
+- libArrhenius https://github.com/CD3/libArrhenius
+- BoostUnitDefinitions https://github.com/CD3/BoostUnitDefinitions
+

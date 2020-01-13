@@ -5,6 +5,7 @@ if( TARGET ThermalAnalysis )
 endif( TARGET ThermalAnalysis )
 
 OPTION( BUILD_UNIT_TESTS "Build unit tests for the library" ON )
+OPTION( USE_PMM "Use pmm (https://github.com/vector-of-bool/pmm)" OFF )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
@@ -21,8 +22,20 @@ configure_file( "${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/version.h"
                 "${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/version.h")
 
 # common dependencies
+if( USE_PMM)
+include(pmm)
+pmm(
+  VERBOSE
+  CONAN
+  REMOTES cd3 https://api.bintray.com/conan/cd3/conan-devel
+  BINCRAFTERS
+  COMMUNITY
+  )
+endif()
  find_package( Boost REQUIRED )
  find_package( libField REQUIRED )
+ find_package( liInterpolate REQUIRED )
+ find_package( liArrhenius REQUIRED )
  find_package( BoostUnitDefinitions REQUIRED )
 
 string( REGEX REPLACE "^lib" "" LIB_NAME ${PROJECT_NAME} )
@@ -41,6 +54,8 @@ target_include_directories( ${LIB_NAME} INTERFACE
 target_link_libraries(${LIB_NAME}
                         INTERFACE
                         libField::Field
+                        libInterpolate::Interpolate
+                        libArrhenius::Arrhenius
                         BoostUnitDefinitions::BoostUnitDefinitions
                      )
 
