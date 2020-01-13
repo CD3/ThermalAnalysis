@@ -1,3 +1,10 @@
 .*.lock
 latex.out/
 main.pdf
+.latexrun.db
+*-gnuplottex-*.gnuplot
+*.gnuploterrors
+*.aux
+*.fls
+*.log
+*.synctex.gz
