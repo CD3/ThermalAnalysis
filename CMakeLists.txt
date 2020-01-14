@@ -34,7 +34,8 @@ pmm(
 endif()
  find_package( Boost REQUIRED )
  find_package( libField REQUIRED )
- find_package( liInterpolate REQUIRED )
+ find_package( libInterpolate REQUIRED )
+ find_package( libIntegrate REQUIRED )
  find_package( liArrhenius REQUIRED )
  find_package( BoostUnitDefinitions REQUIRED )
 
