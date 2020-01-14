@@ -36,7 +36,7 @@ endif()
  find_package( libField REQUIRED )
  find_package( libInterpolate REQUIRED )
  find_package( libIntegrate REQUIRED )
- find_package( liArrhenius REQUIRED )
+ find_package( libArrhenius REQUIRED )
  find_package( BoostUnitDefinitions REQUIRED )
 
 string( REGEX REPLACE "^lib" "" LIB_NAME ${PROJECT_NAME} )
