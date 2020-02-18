@@ -18,14 +18,18 @@ using namespace std;
 // physical sense, keeping in mind that these array values show part of a
 // larger continuous curve. What should the updated resolution of the field be?
 // Be general, not just geometric time spacing may be used
+//local functions
 class LinearCombination
 {
 
  public:
-  using currentType = _1D::LinearInterpolator<double>;
+//using currentType = _1D::LinearInterpolator<double>;   
+  using currentType = _1D::CubicSplineInterpolator<double>;
+//using currentType = _1D::MonotonicInterpolator<double>; 
+
   vector<double> alphas;
   vector<double> offsets;
-  vector<_1D::LinearInterpolator<double>> interpolators;
+  vector<currentType> interpolators;
 
   template <class Obj>
   struct get_data_type {
@@ -62,7 +66,7 @@ class LinearCombination
   {
     //unimplemented
     //exchange _1D for any interpolator type
-    auto interp = MakeInterpolator<_1D::LinearInterpolator<double>>(field);
+    auto interp = MakeInterpolator<currentType>(field);
     interpolators.push_back(interp);
     offsets.push_back(t);
     alphas.push_back(scale);
@@ -82,9 +86,9 @@ class LinearCombination
     //being better at interpolating
     field.set_f([this, &field](auto t) mutable{
     int tem = 0;
-    auto local_alph = (this->alphas);
-    auto local_off = (this->offsets);
-    auto local_interps = (this->interpolators);
+    auto &local_alph = (this->alphas);
+    auto &local_off = (this->offsets);
+    auto &local_interps = (this->interpolators);
     //currently replacing adding field with adding interpolator
     for(int i = 0; i < t.size(); i++){
         // i is always 0, this is just a way to unpack the list while not breaking under 
@@ -102,7 +106,14 @@ class LinearCombination
     });
     return;
   }
+
+  template <typename F>
+  double err(F A, F B){
+    return (A - B) / B;
+  }
+
 };
+
 
 TEST_CASE("TempBuilder Tests")
 {
@@ -136,43 +147,83 @@ TEST_CASE("TempBuilder Tests")
       tempBuilder.add(Tinf_vs_t, 2, -1);
 
       tempBuilder.build(T1_vs_t);//by ref
-      
+      for (int i = 0; i < 100; i++) {
+        double dt = 5. / (100 - 1);
+        double t = i * dt;
+        CHECK(T1_vs_t.getCoord(i) == Approx(t).epsilon(0.02));
+        if (t < 2) {
+          CHECK(T1_vs_t(i) == Approx(Tinf(t)).epsilon(0.02));
+        } else {
+          CHECK(T1_vs_t(i) == Approx(Tinf(t) - Tinf(t - 2)).epsilon(0.02));
+        }
+      }
+     
+
+      //Setting up strings to keep track of iteration number, etc
+      string locStr = "iteration: ";
+      string calcValStr = "calculated value: ";
+      string actValStr = "expected value: ";
+      string timeStr = "time: ";
+      string printString = "";
+      string divider = "";
+      for(int i = 0; i < 20; i++){
+        divider += "-";
+      }
+      divider += "\n";
+      //attempted to catch only when a value was past epsilon, abandoned, should be removed
+      bool flag = true;
+      for (int i = 0; i < 100; i++) {
+        flag = true;
+        locStr = "iteration: ";
+        timeStr = "time: ";
+        calcValStr = "calculated value: ";
+        actValStr = "expected value: ";
+        string flagStr;
+        double dt = 5. / (100 - 1);
+        double t = i * dt;
+        if(t < 2){
+          flag = (T1_vs_t(i) == Approx(Tinf(t)).epsilon(0.02));
+          flagStr = std::to_string(Tinf(t));
+        } else {
+          flag = (T1_vs_t(i) == Approx(Tinf(t) - Tinf(t - 2)));
+          flagStr = std::to_string(Tinf(t) - Tinf(t - 2));
+        }
+        locStr += std::to_string(i);
+        locStr += "\n";
+        timeStr += std::to_string(t);
+        timeStr += "\n";
+        calcValStr += std::to_string(T1_vs_t(i));
+        calcValStr += "\n";
+        actValStr += flagStr; 
+        actValStr += "\n";
+        printString += locStr + timeStr + calcValStr + actValStr + divider;
+      }
+      string interpolatorName = "CubicSplineInterpResults";
+      string graphName = "./graphs/T1_vs_t-" + interpolatorName;
+      //printing results and saving graphs
       {
-      std::ofstream out("T1_vs_t");
+      std::ofstream out("./interpResults/" + interpolatorName + ".dat");
+      out << printString;
+      out.flush();
+      out.close();
+      }
+
+      {
+      std::ofstream out(graphName);
       out << T1_vs_t;
       out.close();
       }
+
       {
-      std::ofstream out("Tinf_vs_t");
+      std::ofstream out("./graphs/Tinf_vs_t");
       out << Tinf_vs_t;
       out.close();
       }
-           
-      bool f1 = false;
-      bool f2 = false;
-      bool f3 = false;
+      
+      //plot the temperature profile created
+      //string plotString = "gnuplot -p -e \"plot '"+ graphName +"'\"";
+      //system((plotString).c_str());
 
-      for (int i = 0; i < 100; ++i) {
-        //unfinished
-        if((f1 && f2) && f3){
-          std::cout << "\n\nprevious failure\n\n";
-        }
-        double dt = 5. / (100 - 1);
-        double t = i * dt;
-        std::cout << std::to_string(i) + "\n";
-        CHECK(T1_vs_t.getCoord(i) == Approx(t).epsilon(0.02));
-        f1 = true;
-        if (t < 2) {
-          CHECK(T1_vs_t(i) == Approx(Tinf(t)).epsilon(0.02));
-          f2 = true;
-        } else {
-          CHECK(T1_vs_t(i) == Approx(Tinf(t) - Tinf(t - 2)).epsilon(0.02));
-          f3 = true;
-        }
-      f1 = false;
-      f2 = false;
-      f3 = false;
-      }
     }
   }
 }
