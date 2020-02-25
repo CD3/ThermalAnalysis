@@ -1,0 +1,13 @@
+Research:
+Start using the notebook
+Write up monthly report
+Keep issues AND progress/questions in notebook
+Postprocessing interpolators, have some reason to choose one over other.
+*Make printing results into a method, and have some way to accomplish comparing values without having to read from results
+improving interpolators, enter extra 0 values at the beginning?
+switch profiles to pointers A[i] = *A + i : save processing time
+
+Questions:
+  should the "build" method blow out previous added from memory
+  I have them as "references" but I don't know if any actual changes have been made
+  I have the title linearcombinator/linearcombination wrong in the header
