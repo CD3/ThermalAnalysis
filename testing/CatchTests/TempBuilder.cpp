@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "fstream"
-#include <ThermalAnalysis/LinearCombinator.hpp>
+#include <ThermalAnalysis/LinearCombination.hpp>
 #include <cmath>
 #include <iostream>
 #include <libField/Field.hpp>
@@ -22,7 +22,6 @@ string print_results(Field<double, 1>& built_field, const std::function<double(d
         divider += "-";
       }
       divider += "\n";
-      //attempted to catch only when a value was past epsilon, abandoned, should be removed
       for (int i = 0; i < 100; i++){
         locStr = "iteration: ";
         timeStr = "time: ";
@@ -49,36 +48,14 @@ string print_results(Field<double, 1>& built_field, const std::function<double(d
         printString += locStr + timeStr + calcValStr + actValStr + divider;
       }
       return printString;
-      /*string interpolatorName = "GENERATED";
-      string graphName = "./graphs/T1_vs_t-" + interpolatorName;
-      //printing results and saving graphs
-      {
-      std::ofstream out("./interpResults/" + interpolatorName + ".dat");
-      out << printString;
-      out.flush();
-      out.close();
-      }
-
-      {
-      std::ofstream out(graphName);
-      out << T1_vs_t;
-      out.close();
-      }
-
-      {
-      std::ofstream out("./graphs/Tinf_vs_t");
-      out << Tinf_vs_t;
-      out.close();
-      }*/
-     
 }
 
 TEST_CASE("Multiple Pulse Tests"){
 //100 pulses, 3 seconds apart
   SECTION("Setting up profile"){
-    //as in the other test case, use the same initialization in order to create a shark-fin pulse that we will use to combine 100 times
-     
-       
+      //as in the other test case, use the same initialization in order to create a shark-fin pulse that we will use to combine 100 times
+      //Look into catch 2 for Templated test
+      //You would want to make the test templated to any interpolator with required methods, and return a numerical value for error
       double pulse_spacing = 3; //seconds
       double pulse_duration = 2; //seconds
       double num_pulses = 100; //pulses
@@ -99,11 +76,7 @@ TEST_CASE("Multiple Pulse Tests"){
       tempBuilder.add(Tinf_vs_t, 0, 1);
       tempBuilder.add(Tinf_vs_t, pulse_duration, -1);
 
-
-      //auto t1 = Clock::now();
       tempBuilder.build(T1_vs_t);//by ref
-      //auto t2 = Clock::now();
-      //std::cout << "\nTime to complete build process: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() << " nanoseconds\n";
 
       SECTION("100 pulses"){
         LinearCombination<_1D::LinearInterpolator<double>>longBuilder;
@@ -115,22 +88,7 @@ TEST_CASE("Multiple Pulse Tests"){
         string interpolatorName = "100Pulses";
         string graphName = "./graphs/T1_vs_t-" + interpolatorName;
         //printing results and saving graphs
-/*      {
-        std::ofstream out("./interpResults/" + interpolatorName + ".dat");
-        out << printString;
-        out.flush();
-        out.close();
-        }
-*/
-        {
-        std::ofstream out(graphName); out << T1_vs_t; out.close();
-        }
-
-        //plot the temperature profile created
-        string plotString = "gnuplot -p -e \"plot '"+ graphName +"'\"";
-        system((plotString).c_str());
       }
-     
   }
 }
 
@@ -138,20 +96,17 @@ TEST_CASE("Pulse Construction Tests")
 {
   SECTION("Analytic Temperature Profile")
   {
-    //Tinf seems to be a mapping that is useful?
+    //Tinf is the basic temperature of a laser kept on "infinitely", this is a lambda function to  create that
     auto Tinf = [](double t) -> double {
       return sqrt(t / M_PI);
-    };  // see LinearCombinations write up
+    };  
     SECTION("Building finite-pulse profile")
     {
       //setup thermal profile we will build off of.
-      //Tinf_vs_t is a FIELD
-      //Tempbuilder is a LINEARCOMBINATINO (METHOD IM DEFINING)
       Field<double, 1> Tinf_vs_t(100);
+      //Time spacing is Geometric (not linear
       Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
-      //what is the best way to include this^^ in method? not include it at
-      //all, make it figure it out
-      //just know it sets heat values
+      //Mapping 'y' values of field using lamdba Tinf
       Tinf_vs_t.set_f([&Tinf](auto t) -> double { return Tinf(t[0]); });
 
       // setup thermal profile that will be written to
@@ -164,17 +119,26 @@ TEST_CASE("Pulse Construction Tests")
 //    LinearCombination<_1D::CubicSplineInterpolator<double>>tempBuilder;
 //    LinearCombination<_1D::MontonicInterpolator<double>>tempBuilder;
 
+      //add arg1 with a delayed offset of arg2 with a scalar multiplier of arg3
       tempBuilder.add(Tinf_vs_t, 0, 1);
       tempBuilder.add(Tinf_vs_t, 2, -1);
 
+      //with all inperpolators (based on field data) on the stack, create a new profile and write to arg1
       tempBuilder.build(T1_vs_t);//by ref
+      
+      //perform checks of the agreement with theory of our build method
       for (int i = 0; i < 100; i++) {
         double dt = 5. / (100 - 1);
         double t = i * dt;
+        //checking that the time values are correct in built profile
         CHECK(T1_vs_t.getCoord(i) == Approx(t).epsilon(0.02));
+        //t = 2 corresponds to the offset where the second inf pulse is "added"
+        //with alpha = -1
         if (t < 2) {
+          //comparing temperature value with theory
           CHECK(T1_vs_t(i) == Approx(Tinf(t)).epsilon(0.02));
         } else {
+          //comparing temperature value with theory
           CHECK(T1_vs_t(i) == Approx(Tinf(t) - Tinf(t - 2)).epsilon(0.02));
         }
       }
@@ -186,6 +150,7 @@ TEST_CASE("Pulse Construction Tests")
 TEST_CASE("Interpolator Comparison"){
   SECTION("Initialize Interpolators"){
     //initialize a number of LinearCombinators for their accuracy to be compared
+    //catch 2 template tests
     LinearCombination<_1D::LinearInterpolator<double>> Linear;
     LinearCombination<_1D::CubicSplineInterpolator<double>> Cubic;
     LinearCombination<_1D::MonotonicInterpolator<double>> Monotonic;
@@ -215,7 +180,9 @@ TEST_CASE("Interpolator Comparison"){
       Monotonic.add(Tinf_vs_t, 2, -1);
       Monotonic.build(T1_vs_tMon);
       SECTION("Compare Results"){
+        //lambda for what the correct time should be (uses ternary operator for brevity)
         auto function = [Tinf](double time){return time < 2 ? Tinf(time) : (Tinf(time) - Tinf(time - 2));};
+        //references method declared at beginning
         string printLinear    = print_results(T1_vs_tLin, function);
         string printCubic     = print_results(T1_vs_tCub, function);
         string printMonotonic = print_results(T1_vs_tMon, function);
@@ -226,9 +193,11 @@ TEST_CASE("Interpolator Comparison"){
           double dt = 5. / (100 - 1);
           double t = i * dt;
           //t_value is assumed to be correct
+          //difference between theory and build for each interpolator
           double LinDiff;
           double CubicDiff;
           double MonoDiff;
+          //theoretical value
           double theoVal;
           if (t < 2) {
             theoVal = Tinf(t);
@@ -252,15 +221,16 @@ TEST_CASE("Interpolator Comparison"){
         double LinMeanErr;
         double CubicMeanErr;
         double MonMeanErr;
-        //skipping 1/0
+        //i = 1 to skipping 1/0 NaN that occurred in prev step, and calculating averages
         for(int i = 1; i < 100; i++){
           LinMeanErr += LinearDifferences[i];
           CubicMeanErr += CubicDifferences[i];
           MonMeanErr += MonoDifferences[i];
         }
-        LinMeanErr /= 100.0;
-        CubicMeanErr /= 100.0;
-        MonMeanErr /= 100.0;
+        //99 because we skipped 0 in the previous step
+        LinMeanErr /= 99.0;
+        CubicMeanErr /= 99.0;
+        MonMeanErr /= 99.0;
         string reportString = "Mean Perc. Err Linear: ";
         reportString += std::to_string(LinMeanErr) + "\n";
         reportString += "Mean Perc. Err Cubic: ";
@@ -272,6 +242,28 @@ TEST_CASE("Interpolator Comparison"){
         //plot the temperature profile created
         //string plotString = "gnuplot -p -e \"plot '"+ graphName +"'\"";
         //system((plotString).c_str());
+        //
+        /*string interpolatorName = "GENERATED";
+        string graphName = "./graphs/T1_vs_t-" + interpolatorName;
+        //printing results and saving graphs
+        {
+        std::ofstream out("./interpResults/" + interpolatorName + ".dat");
+        out << reportString;
+        out.flush();
+        out.close();
+        }
+        //Saving T1_vs_t
+        {
+        std::ofstream out(graphName);
+        out << T1_vs_t;
+        out.close();
+        }
+        //Saving the original raw profile
+        {
+        std::ofstream out("./graphs/Tinf_vs_t");
+        out << Tinf_vs_t;
+        out.close();
+        }*/
       }
     }
   }

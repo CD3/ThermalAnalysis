@@ -11,3 +11,39 @@ Questions:
   should the "build" method blow out previous added from memory
   I have them as "references" but I don't know if any actual changes have been made
   I have the title linearcombinator/linearcombination wrong in the header
+
+2-25-2020 After Meeting with Clark:
+Change tests to templated test (look up for Catch2), that way additional interpolators can be added no problem
+Look into LibArrhenius and at very minimum be able to feed libArrhnenius a temp Profile (hopefully multipulse) evaluate Omega at it
+have vector of interpolators (only as big as it needs to be) "uniqueInterps"
+map a map that maps the adress of a Field (only 8 bytes, small) to the address of a Interpolator(inside of Unique Interps) "ExistenceMap"
+have a vector that contains references to vectors in unique vector, entries can and SHOULD be repeated ONLY HERE. (interp_references)
+
+  std::map<key, val> identifier;
+  std::map<&Field<double, 1>, &interp> identifier;
+
+
+  Soooo the process would be:
+    A field given to add as a reference
+    F is checked into a map (or at least it is checked if that key exists)
+    If key exists: -- if(map.find(key) != map.end())
+      add the value to interp_references -- interp_references.push_back()
+    If not: -- if(map.find(key) == map.end())
+      create an interpolator &I (save reference)
+      add key-val pair (F:&I) to map
+      add &I to unique_interps AND to interp_references
+    Wash, rinse, repeat
+  This is an alternative to the overloaded method, although that should still exist
+    Why the overloaded method should still exist:
+      MODULARITY, and IDIOT PROOFING. DO NOT assume your user knows what they are handing you
+
+email Mr. A
+impressed prof with knowing what a hashtable is
+
+GOALS FOR THIS WEEK:
+C A: clean up code, better documentation
+  B: Implement the reference/map changes
+  C: Implement the arrhenius damage
+Reasonable, and able to be done. Anything further should come from the rest of the notes (Templating interpolator comparison, etc)
+  D: (ITP) add a couple zeroes at the beginning and figure out how that works. Add a test case for "experimental improved interpolator methods"
+

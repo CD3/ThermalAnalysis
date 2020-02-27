@@ -1,4 +1,5 @@
 #include <vector>
+#include <set>
 #include <cmath>
 #include <iostream>
 #include <libField/Field.hpp>
@@ -12,17 +13,17 @@ typedef std::chrono::high_resolution_clock Clock;
 template<class currentType>
 class LinearCombination
 {
-
  public:
 //using currentType = _1D::LinearInterpolator<double>;   
 //using currentType = _1D::CubicSplineInterpolator<double>;
 //using currentType = _1D::MonotonicInterpolator<double>; 
-
   vector<double> alphas;
   vector<double> offsets;
-  vector<currentType*> interpolators;
+  vector<int> FieldIDs;
+  vector<currentType> interpolators;
+//std::map<&Field<double, 1>, &interp> existenceMap;
+  
 
-// template <class currentType>
   LinearCombination(){
 
   }
@@ -41,9 +42,10 @@ class LinearCombination
   //simple method to encapsulate making a interpolator and setting data to a
   //field's data. Utitilizes get_data_type_t, etc
   template <class InterpType>
-  auto& MakeInterpolator(const Field<get_data_type_t<InterpType>,1>& F)
+  auto MakeInterpolator(const Field<get_data_type_t<InterpType>,1>& F)
   {
-    InterpType& interp;
+    //could store fields and see if contained
+    InterpType interp;
     interp.setData(F.size(), F.getCoordinateSystem().getAxis(0).data(), F.data());
     return interp;
   }
@@ -55,14 +57,14 @@ class LinearCombination
   //look into switching _1d:: (typed twice) to VVV
   //template <typename I>
   //_1D::MonotonicInterpolator<double> interp;
-
   
   template <typename F, typename T, typename S>
   void add(const F& field, T t, S scale)
   {
     //unimplemented
-    //exchange _1D for any interpolator type
-    auto interp& = MakeInterpolator<currentType>(field);
+    //what is the way to reference? makeInterpolator has no check to create
+    //Pass in some constant reference ID
+    auto interp = MakeInterpolator<currentType>(field);
     interpolators.push_back(interp);
     offsets.push_back(t);
     alphas.push_back(scale);
@@ -98,7 +100,7 @@ class LinearCombination
           string str_interp = "\nraw interp = " + std::to_string(local_interp(t[i]));
           string str_adj = "\nadj interp = " + std::to_string(local_interp(t[i]) * local_alph[j]);
           string sout = str_loc + str_ao + str_interp + str_adj + "\n\n------------------------------------\n ";
-        std::cout << sout;*/
+          std::cout << sout;*/
         } return Temp; }
     });
     auto t2 = Clock::now();
