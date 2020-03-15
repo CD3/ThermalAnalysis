@@ -1,11 +1,12 @@
-#include "catch.hpp"
-#include "fstream"
-#include <ThermalAnalysis/LinearCombination.hpp>
+#include <chrono>
 #include <cmath>
+#include "fstream"
 #include <iostream>
+#include "catch.hpp"
 #include <libField/Field.hpp>
 #include <libInterpolate/Interpolate.hpp>
-#include <chrono>
+#include <ThermalAnalysis/LinearCombination.hpp>
+#include <libArrhenius/Integration/ArrheniusIntegral.hpp>
 
 using namespace std;
 
@@ -50,46 +51,12 @@ string print_results(Field<double, 1>& built_field, const std::function<double(d
       return printString;
 }
 
-TEST_CASE("Multiple Pulse Tests"){
-//100 pulses, 3 seconds apart
-  SECTION("Setting up profile"){
-      //as in the other test case, use the same initialization in order to create a shark-fin pulse that we will use to combine 100 times
-      //Look into catch 2 for Templated test
-      //You would want to make the test templated to any interpolator with required methods, and return a numerical value for error
-      double pulse_spacing = 3; //seconds
-      double pulse_duration = 2; //seconds
-      double num_pulses = 100; //pulses
-
-      auto Tinf = [](double t) -> double {
-        return sqrt(t / M_PI);
-      };
-      Field<double, 1> Tinf_vs_t(800);
-      Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
-      Tinf_vs_t.set_f([&Tinf](auto t) -> double { return Tinf(t[0]); });
-
-      Field<double, 1> T1_vs_t(4000);
-      T1_vs_t.setCoordinateSystem(Uniform<double>(0, pulse_spacing * num_pulses* 1.1)); //340 because 3 second seperation * 100 pulses
-
-      //need to create orginal profile first
-      LinearCombination<_1D::LinearInterpolator<double>>tempBuilder;
-
-      tempBuilder.add(Tinf_vs_t, 0, 1);
-      tempBuilder.add(Tinf_vs_t, pulse_duration, -1);
-
-      tempBuilder.build(T1_vs_t);//by ref
-
-      SECTION("100 pulses"){
-        LinearCombination<_1D::LinearInterpolator<double>>longBuilder;
-        for(int i = 0; i < num_pulses; i++){
-          longBuilder.add(T1_vs_t, i * pulse_spacing, 1);
-        }
-        longBuilder.build(T1_vs_t);
-
-        string interpolatorName = "100Pulses";
-        string graphName = "./graphs/T1_vs_t-" + interpolatorName;
-        //printing results and saving graphs
-      }
-  }
+// method for simplicity scaling existing constructed field
+double ScaledOmega(Field<double, 1> built_field, double alpha, double T0){
+    built_field *= alpha;
+    built_field += T0;
+    libArrhenius::ArrheniusIntegral<double> Arr(3.1e99, 6.28e5);
+    return Arr(built_field.getCoordinateSystem().size(0), built_field.getCoordinateSystem().getAxis(0).data(), built_field.data());
 }
 
 TEST_CASE("Pulse Construction Tests")
@@ -142,8 +109,55 @@ TEST_CASE("Pulse Construction Tests")
           CHECK(T1_vs_t(i) == Approx(Tinf(t) - Tinf(t - 2)).epsilon(0.02));
         }
       }
-     
     }
+  }
+}
+
+TEST_CASE("Multiple Pulse Tests"){
+//100 pulses, 3 seconds apart
+  SECTION("Build single profile"){
+      //as in the other test case, use the same initialization in order to
+      //create a shark-fin pulse that we will use to combine 100 times
+      //Look into catch 2 for Templated test
+      //You would want to make the test templated to any interpolator with required methods, and return a numerical value for error
+      double pulse_spacing = 3; //seconds
+      double pulse_duration = 2;//seconds
+      double num_pulses = 5;  //pulses
+
+      auto Tinf = [](double t) -> double {
+        return sqrt(t / M_PI);
+      };
+      // set up a large amount of points for high volume testing
+      Field<double, 1> Tinf_vs_t(2000);
+      Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
+      Tinf_vs_t.set_f([&Tinf](auto t) -> double { return Tinf(t[0]); });
+
+      Field<double, 1> T1_vs_t(2000);
+      T1_vs_t.setCoordinateSystem(Uniform<double>(0, pulse_spacing * num_pulses* 1.1)); //340 because 3 second seperation * 100 pulses
+
+      LinearCombination<_1D::LinearInterpolator<double>> tempBuilder;
+      tempBuilder.add(Tinf_vs_t, 0, 1);
+      tempBuilder.add(Tinf_vs_t, pulse_duration, -1);
+      tempBuilder.build(T1_vs_t);
+
+      SECTION("100 pulses"){ 
+        LinearCombination<_1D::LinearInterpolator<double>>longBuilder;
+        for(int i = 0; i < num_pulses; i++){
+          longBuilder.add(T1_vs_t, i * pulse_spacing, 1);
+        }
+        longBuilder.build(T1_vs_t);
+        auto times = T1_vs_t.getCoordinateSystem()[0];
+        for(int i = 0; i < times.size(); i++){
+          double dt = 16.5 / (2000 - 1);
+          double t = i * dt;
+          std::cout << i << ":  " << times[i] << "\n";
+          std::cout << T1_vs_t << " ->  " << times[i] << "\n";
+          if(i == 0){
+            continue;
+          }
+          std::cout << "dt:  " << times[i] - times[i - 1] << "\n";
+        }
+      }
   }
 }
 
@@ -167,7 +181,7 @@ TEST_CASE("Interpolator Comparison"){
     T1_vs_tCub.setCoordinateSystem(Uniform<double>(0, 5));
     T1_vs_tMon.setCoordinateSystem(Uniform<double>(0, 5));
 
-    SECTION("Run Interpolation"){
+    SECTION("Check Interpolation"){
       Linear.add(Tinf_vs_t, 0, 1);
       Linear.add(Tinf_vs_t, 2, -1);
       Linear.build(T1_vs_tLin);
@@ -238,33 +252,75 @@ TEST_CASE("Interpolator Comparison"){
         reportString += "Mean Perc. Err Monotonic: ";
         reportString += std::to_string(MonMeanErr) + "\n";
         std::cout << reportString;
-        //Setting up strings to keep track of iteration number, etc
-        //plot the temperature profile created
-        //string plotString = "gnuplot -p -e \"plot '"+ graphName +"'\"";
-        //system((plotString).c_str());
-        //
-        /*string interpolatorName = "GENERATED";
-        string graphName = "./graphs/T1_vs_t-" + interpolatorName;
-        //printing results and saving graphs
-        {
-        std::ofstream out("./interpResults/" + interpolatorName + ".dat");
-        out << reportString;
-        out.flush();
-        out.close();
-        }
-        //Saving T1_vs_t
-        {
-        std::ofstream out(graphName);
-        out << T1_vs_t;
-        out.close();
-        }
-        //Saving the original raw profile
-        {
-        std::ofstream out("./graphs/Tinf_vs_t");
-        out << Tinf_vs_t;
-        out.close();
-        }*/
       }
     }
   }
 }
+
+TEST_CASE("Arrhenius Integral Test"){
+  SECTION("Set Up Temperature Profiles"){
+    double bodytemp = 310;
+    double t_const  = 11.95800;
+    libArrhenius::ArrheniusIntegral<double> Arr(3.1e99, 6.28e5);
+    SECTION("Constant Temp Profile Evaulation"){
+      auto Tconst = [t_const](double t) -> double {
+        return t_const;
+      };  
+      //setup constant temp thermal profile we will evaluate
+      Field<double, 1> Tconst_vs_t(100);
+      Tconst_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
+      Tconst_vs_t.set_f([&Tconst](auto t) -> double { return Tconst(t[0]); });
+      //set up arrhenius integral
+
+      Tconst_vs_t += bodytemp;
+      double Omega = Arr(Tconst_vs_t.getCoordinateSystem().size(0), Tconst_vs_t.getCoordinateSystem().getAxis(0).data(), Tconst_vs_t.data());
+      double Omega_a = (3.1e99) * exp(-6.28e5 / (8.314 * (bodytemp + t_const))) * 248.479;
+      CHECK(Omega == Approx(Omega_a).epsilon(0.02));
+    }
+
+    // setting up single pulse profile
+    auto Tinf = [](double t) -> double {
+      return sqrt(t / M_PI);
+    };
+    Field<double, 1> Tinf_vs_t(800);
+    Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
+    Tinf_vs_t.set_f([&Tinf](auto t) -> double { return Tinf(t[0]); });
+    Field<double, 1> T1_vs_t(100);
+    T1_vs_t.setCoordinateSystem(Uniform<double>(0, 5));
+    LinearCombination<_1D::LinearInterpolator<double>>tempBuilder;
+
+    tempBuilder.add(Tinf_vs_t, 0, 1);
+    tempBuilder.add(Tinf_vs_t, 2, -1);
+    tempBuilder.build(T1_vs_t);
+    
+    //Damage threshold calculation should be agnostic of profile, it only happens to be passed a single pulse with the given parameters
+    SECTION("Calculating Damage Threshold"){
+      double U, M, L; //upper bound
+      double O_U = 0;
+      double O_M = 0;
+      double O_L = 0;
+      U = 1;
+      L = 0; //arr(0) -> 0
+      O_U = ScaledOmega(T1_vs_t, U, 310);
+      while(O_U < 1){
+        U *= 2;
+        O_U = ScaledOmega(T1_vs_t, U, 310);
+      }
+      M = U;
+      double dOmega_dAlpha;
+      while(1 != Approx(O_M).epsilon(0.01)){
+        O_U = ScaledOmega(T1_vs_t, M * 1.01, 310);
+        O_L = ScaledOmega(T1_vs_t, M * 0.99, 310);
+        dOmega_dAlpha = (O_U - O_L) / (M * 0.02);
+        O_M = ScaledOmega(T1_vs_t, M, 310);
+        M = M - (((ScaledOmega(T1_vs_t, M, 310) - 1) / dOmega_dAlpha));
+        CHECK(M > 0);
+        std::cout << Arr(T1_vs_t.getCoordinateSystem().size(0), T1_vs_t.getCoordinateSystem().getAxis(0).data(), T1_vs_t.data());
+        std::cout << O_M << "\n";
+      }
+      std::cout << "final Omega: " << O_M << " at alpha = " << M << "\n";
+    }
+  }
+}
+
+

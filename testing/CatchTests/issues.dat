@@ -26,9 +26,9 @@ have a vector that contains references to vectors in unique vector, entries can 
   Soooo the process would be:
     A field given to add as a reference
     F is checked into a map (or at least it is checked if that key exists)
-    If key exists: -- if(map.find(key) != map.end())
+    If key exists: -- if(map.find(key) == map.end())
       add the value to interp_references -- interp_references.push_back()
-    If not: -- if(map.find(key) == map.end())
+    If not: -- if(map.find(key) != map.end())
       create an interpolator &I (save reference)
       add key-val pair (F:&I) to map
       add &I to unique_interps AND to interp_references
