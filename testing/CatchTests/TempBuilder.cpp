@@ -11,6 +11,10 @@
 using namespace std;
 
 typedef std::chrono::high_resolution_clock Clock;
+// Limitations of the current tests:
+//  only dealing with 1 dimensional pulses
+//  physical parameters reflect retinal values
+//  no way to "cut off" non ideal fields for finding damage threshold (cooling profiles/0 temp profiles)
 
 string print_results(Field<double, 1>& built_field, const std::function<double(double)>& lambda){
       string locStr = "iteration: ";
@@ -50,13 +54,42 @@ string print_results(Field<double, 1>& built_field, const std::function<double(d
       }
       return printString;
 }
-
 // method for simplicity scaling existing constructed field
 double ScaledOmega(Field<double, 1> built_field, double alpha, double T0){
     built_field *= alpha;
     built_field += T0;
-    libArrhenius::ArrheniusIntegral<double> Arr(3.1e99, 6.28e5);
+    libArrhenius::ArrheniusIntegral<double> Arr(3.1e99, 6.28e5); // A and E_a should be passed in as an argument if materials change
     return Arr(built_field.getCoordinateSystem().size(0), built_field.getCoordinateSystem().getAxis(0).data(), built_field.data());
+}
+
+double damageThreshold(Field<double, 1> built_field, double T0, double precision){
+    // Newton's method to minimize the Arrhenius integral, so f' is the
+    // integrand and f'' is approximated through a secant line centered around
+    // x
+    double U, M, L; //Upper, Middle, Lower bounds
+    double O_U, O_M, O_L; //"Old" UML
+    double dOmega_dAlpha; // secant approximation of slope at f(M)
+    double dM = 0.01; // range for secant calculation
+    O_U = 0;
+    O_M = 0;
+    O_L = 0;
+    U = 1;
+    L = 0; //arr(0) -> 0
+    O_U = ScaledOmega(built_field, U, T0);
+    while(O_U < 1){
+      U *= 2;
+      O_U = ScaledOmega(built_field, U, T0);
+    }
+    M = U;
+    while(1 != Approx(O_M).epsilon(precision)){
+      O_U = ScaledOmega(built_field, M * (1. + dM), T0);
+      O_L = ScaledOmega(built_field, M * (1. - dM), T0);
+      dOmega_dAlpha = (O_U - O_L) / (M * (dM * 2.));
+      O_M = ScaledOmega(built_field, M, T0);
+      M = M - (((ScaledOmega(built_field, M, T0) - 1.) / dOmega_dAlpha));
+      CHECK(M > 0);
+    }
+    return M;
 }
 
 TEST_CASE("Pulse Construction Tests")
@@ -128,11 +161,11 @@ TEST_CASE("Multiple Pulse Tests"){
         return sqrt(t / M_PI);
       };
       // set up a large amount of points for high volume testing
-      Field<double, 1> Tinf_vs_t(2000);
+      Field<double, 1> Tinf_vs_t(1000);
       Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
       Tinf_vs_t.set_f([&Tinf](auto t) -> double { return Tinf(t[0]); });
 
-      Field<double, 1> T1_vs_t(2000);
+      Field<double, 1> T1_vs_t(1000);
       T1_vs_t.setCoordinateSystem(Uniform<double>(0, pulse_spacing * num_pulses* 1.1)); //340 because 3 second seperation * 100 pulses
 
       LinearCombination<_1D::LinearInterpolator<double>> tempBuilder;
@@ -148,16 +181,71 @@ TEST_CASE("Multiple Pulse Tests"){
         longBuilder.build(T1_vs_t);
         auto times = T1_vs_t.getCoordinateSystem()[0];
         for(int i = 0; i < times.size(); i++){
-          double dt = 16.5 / (2000 - 1);
+          double dt = 16.5 / (1000 - 1);
           double t = i * dt;
-          std::cout << i << ":  " << times[i] << "\n";
-          std::cout << T1_vs_t << " ->  " << times[i] << "\n";
-          if(i == 0){
-            continue;
-          }
-          std::cout << "dt:  " << times[i] - times[i - 1] << "\n";
+//        std::cout << i << ":  " << times[i] << "\n";
+//        std::cout << T1_vs_t << " ->  " << times[i] << "\n";
+          
+//        std::cout << "dt:  " << times[i] - times[i - 1] << "\n";
         }
       }
+  }
+}
+
+TEMPLATE_TEST_CASE("Accurate interpolation", "", (_1D::LinearInterpolator<double>), (_1D::CubicSplineInterpolator<double>), (_1D::MonotonicInterpolator<double>)){
+  //catch 2 template tests
+  SECTION("Initialize Interpolators"){
+    LinearCombination<TestType> Combinator;
+    //initialize pulse profiles for the various Combinators to build from (Tinf_vs_t) and write to (T1_vs_t)
+    auto Tinf = [](double t) -> double {return sqrt(t / M_PI);};
+    Field<double, 1> Tinf_vs_t(100);
+    Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
+    Tinf_vs_t.set_f([&Tinf](auto t) -> double { return Tinf(t[0]); });
+
+    Field<double, 1> T1_vs_t(100);
+    T1_vs_t.setCoordinateSystem(Uniform<double>(0, 5));
+
+    SECTION("Check Interpolation"){
+      Combinator.add(Tinf_vs_t, 0, 1);
+      Combinator.add(Tinf_vs_t, 2, -1);
+      Combinator.build(T1_vs_t);
+
+      SECTION("Compare Results"){
+        auto function = [Tinf](double time){return time < 2 ? Tinf(time) : (Tinf(time) - Tinf(time - 2));};
+        //references method declared at beginning
+        string printRes = print_results(T1_vs_tLin, function);
+        vector<double> Differences;
+        for (int i = 0; i < 100; i++) {
+          double dt = 5. / (100 - 1);
+          double t = i * dt;
+          //t_value is assumed to be correct
+          //difference between theory and build for each interpolator
+          double Diff;
+          //theoretical value
+          double theoVal;
+          if (t < 2) {
+            theoVal = Tinf(t);
+            Diff = T1_vs_t(i)   - theoVal;
+          } else {
+            theoVal = (Tinf(t) - Tinf(t - 2));
+            Diff = T1_vs_t(i)   - theoVal;
+          }
+          CHECK(theoVal == Approx(T1_vs_t(i)).epsilon(0.02));
+          //percent differences
+          Diff /= theoVal;
+        }
+        double MeanErr;
+        //i = 1 to skipping 1/0 NaN that occurred in prev step, and calculating averages
+        for(int i = 1; i < 100; i++){
+          MeanErr += LinearDifferences[i];
+        }
+        //99 because we skipped 0 in the previous step
+        MeanErr /= 99.0;
+        string reportString = "Mean Perc. Err Linear: ";
+        reportString += std::to_string(MeanErr) + "\n";
+        //std::cout << reportString;
+      }
+    }
   }
 }
 
@@ -257,70 +345,158 @@ TEST_CASE("Interpolator Comparison"){
   }
 }
 
-TEST_CASE("Arrhenius Integral Test"){
+TEST_CASE("Arrhenius"){
   SECTION("Set Up Temperature Profiles"){
-    double bodytemp = 310;
-    double t_const  = 11.95800;
-    libArrhenius::ArrheniusIntegral<double> Arr(3.1e99, 6.28e5);
-    SECTION("Constant Temp Profile Evaulation"){
-      auto Tconst = [t_const](double t) -> double {
-        return t_const;
-      };  
-      //setup constant temp thermal profile we will evaluate
-      Field<double, 1> Tconst_vs_t(100);
-      Tconst_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
-      Tconst_vs_t.set_f([&Tconst](auto t) -> double { return Tconst(t[0]); });
-      //set up arrhenius integral
+    //set up physical constants
+    double bodytemp = 310.0; // K
+    double t_const  = 11.95800; // K
+    double A    = 3.1e99;
+    double E_a  = 6.28e5;// J / mol
+    double R    = 8.314; // J / mol K
+    double Omega; // Value for ArrheniusIntegral (Class)
+    double Omega_a; //Value of ArrheniusIntegral (Analytical)
+    double m;
+    // enstantiate objects (Fields, ArrheniusIntegral, TempBuilder)
+    Field<double, 1> Tconst_vs_t(100);
+    Field<double, 1> T_const_pulse_vs_t(800);
+    libArrhenius::ArrheniusIntegral<double> Arrhenius(A, E_a);
+    LinearCombination<_1D::LinearInterpolator<double>> tempBuilder;
+    // lambda function to return constant value
+    auto Tconst = [t_const](double t) -> double {
+      return t_const;
+    };  
+    //setup constant temp thermal profile
+    Tconst_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
+    Tconst_vs_t.set_f([&Tconst](auto t) -> double { return Tconst(t[0]); });
+    // setup field to build to
+    T_const_pulse_vs_t.setCoordinateSystem(Uniform<double>(0, 5));
+    //build pulse
+    tempBuilder.add(Tconst_vs_t, 0, 1);
+    tempBuilder.add(Tconst_vs_t, 2, -1);
+    tempBuilder.build(T_const_pulse_vs_t);
+    T_const_pulse_vs_t += bodytemp; //??? value is close but field should represent DeltaT???
+    //Verify calculation matches analytical solution
+    Omega = Arrhenius(T_const_pulse_vs_t.getCoordinateSystem().size(0), T_const_pulse_vs_t.getCoordinateSystem().getAxis(0).data(), T_const_pulse_vs_t.data());
+    Omega_a = (A) * exp(-E_a / (R * (bodytemp + t_const))) * 2;
+    CHECK(Omega == Approx(Omega_a).epsilon(0.02));
+    T_const_pulse_vs_t -= bodytemp; //??? value is close but field should represent DeltaT???
 
-      Tconst_vs_t += bodytemp;
-      double Omega = Arr(Tconst_vs_t.getCoordinateSystem().size(0), Tconst_vs_t.getCoordinateSystem().getAxis(0).data(), Tconst_vs_t.data());
-      double Omega_a = (3.1e99) * exp(-6.28e5 / (8.314 * (bodytemp + t_const))) * 248.479;
-      CHECK(Omega == Approx(Omega_a).epsilon(0.02));
-    }
+    ofstream output;
+    output.open("graphs/ConstantTest.txt");
+    output << T_const_pulse_vs_t;
+    output.close();
 
-    // setting up single pulse profile
-    auto Tinf = [](double t) -> double {
-      return sqrt(t / M_PI);
-    };
-    Field<double, 1> Tinf_vs_t(800);
-    Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
-    Tinf_vs_t.set_f([&Tinf](auto t) -> double { return Tinf(t[0]); });
-    Field<double, 1> T1_vs_t(100);
-    T1_vs_t.setCoordinateSystem(Uniform<double>(0, 5));
-    LinearCombination<_1D::LinearInterpolator<double>>tempBuilder;
-
-    tempBuilder.add(Tinf_vs_t, 0, 1);
-    tempBuilder.add(Tinf_vs_t, 2, -1);
-    tempBuilder.build(T1_vs_t);
-    
+    //just to set last mark
     //Damage threshold calculation should be agnostic of profile, it only happens to be passed a single pulse with the given parameters
+    
     SECTION("Calculating Damage Threshold"){
-      double U, M, L; //upper bound
-      double O_U = 0;
-      double O_M = 0;
-      double O_L = 0;
+      //keeping the nearly identical SECTION instead of replacing with method
+      //in case a different method is achieved, needs to be tested, more
+      //verbose output is required, not because I am lazy :)
+      double U, M, L; //Upper, Middle, Lower bounds
+      double O_U, O_M, O_L; //"Old" UML
+      double dOmega_dAlpha; // secant approximation of slope at f(M)
+      double dM = 0.01; // range for secant calculation
+      string minimization_buffer;
+      O_U = 0;
+      O_M = 0;
+      O_L = 0;
       U = 1;
       L = 0; //arr(0) -> 0
-      O_U = ScaledOmega(T1_vs_t, U, 310);
+      O_U = ScaledOmega(T_const_pulse_vs_t, U, bodytemp);
       while(O_U < 1){
         U *= 2;
-        O_U = ScaledOmega(T1_vs_t, U, 310);
+        O_U = ScaledOmega(T_const_pulse_vs_t, U, bodytemp);
       }
       M = U;
-      double dOmega_dAlpha;
       while(1 != Approx(O_M).epsilon(0.01)){
-        O_U = ScaledOmega(T1_vs_t, M * 1.01, 310);
-        O_L = ScaledOmega(T1_vs_t, M * 0.99, 310);
-        dOmega_dAlpha = (O_U - O_L) / (M * 0.02);
-        O_M = ScaledOmega(T1_vs_t, M, 310);
-        M = M - (((ScaledOmega(T1_vs_t, M, 310) - 1) / dOmega_dAlpha));
+        O_U = ScaledOmega(T_const_pulse_vs_t, M * (1. + dM), bodytemp);
+        O_L = ScaledOmega(T_const_pulse_vs_t, M * (1. - dM), bodytemp);
+        dOmega_dAlpha = (O_U - O_L) / (M * (dM * 2.));
+        O_M = ScaledOmega(T_const_pulse_vs_t, M, bodytemp);
+        M = M - (((ScaledOmega(T_const_pulse_vs_t, M, bodytemp) - 1.) / dOmega_dAlpha));
         CHECK(M > 0);
-        std::cout << Arr(T1_vs_t.getCoordinateSystem().size(0), T1_vs_t.getCoordinateSystem().getAxis(0).data(), T1_vs_t.data());
-        std::cout << O_M << "\n";
       }
+      m = M;
       std::cout << "final Omega: " << O_M << " at alpha = " << M << "\n";
     }
+    double m_method = damageThreshold(T_const_pulse_vs_t, bodytemp, 0.01);
+
+    double tau = 2;
+    double T_max = (1.0 / m) * ((E_a / (R * log(A * tau))) - bodytemp);
+    double log_test = log(10);
+    CHECK(T_max == Approx((t_const)).epsilon(0.01));
+  }
+  SECTION("Multiple Pulse Arrhenius Tests"){
+    double N = 1024; // max number of pulses tested
+    double t_o = 3; // rising edge to rising edge seperation (s)
+    double tau = 2;
+    double lambda = 10; // linear point density (1 / s)
+    double bodytemp = 310.0; // K
+    double t_const  = 11.95800; // K
+    double A    = 3.1e99;
+    double E_a  = 6.28e5;// J / mol
+    double R    = 8.314; // J / mol K
+    double m_i;
+    string minimization_buffer;
+
+    libArrhenius::ArrheniusIntegral<double> Arrhenius(A, E_a);
+    LinearCombination<_1D::LinearInterpolator<double>> tempBuilder;
+
+    Field<double, 1> Tconst_vs_t(100);
+    Field<double, 1> Tinf_vs_t(100);
+    Field<double, 1> T1_vs_t(200);
+    Field<double, 1> T2_vs_t(200);
+    Field<double, 1> N_vs_alpha(8);
+
+    Tconst_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
+    Tconst_vs_t.set_f([t_const](auto t) -> double { return t_const; });
+    T1_vs_t.setCoordinateSystem(Geometric<double>(0, 0.1, 1.05));
+    N_vs_alpha.setCoordinateSystem(Geometric<int>(0, 2, 2));
+
+    tempBuilder.add(Tconst_vs_t, 0, 1);
+    tempBuilder.add(Tconst_vs_t, tau, -1);
+    tempBuilder.build(T1_vs_t);
+
+    //have to start at 1 so threshold calculation hits base case
+    //gonna have to define some point density and reset coordinate system each time
+    //probably gonna have to create a new Field each time, unless constructor is redefinable
+    
+    for(int i = 2; i < N + 1; i *= 2){
+      tempBuilder.clear();
+
+      Field<double, 1> Ti_vs_t((int)(lambda * (i + 1) * t_o));
+      Ti_vs_t.setCoordinateSystem(Uniform<double>(0, (i + 1) * t_o));
+
+      for(int j = 1; j < i + 1; j++){
+        tempBuilder.add(T1_vs_t, j * t_o, 1);
+      }
+      tempBuilder.build(Ti_vs_t);
+      m_i = damageThreshold(Ti_vs_t, bodytemp, 0.01);
+      
+      N_vs_alpha(i) = m_i;
+      minimization_buffer += std::to_string(i) + " " + std::to_string(m_i) + "\n";
+      
+      if(i * 2 > N){
+      }
+      std::cout << "\ni: " << i << "\n alpha: " << m_i << "\n";
+    }
+    ofstream output;
+    output.open("graphs/N_vs_alpha_square.txt");
+    output << minimization_buffer;
+//  output << N_vs_alpha;
+    output.close();
+
+    system("echo \"PROCESS COMPLETE\"");
+    
+    //Create a constant field.
+    //Create a single constant pulse
+    //Create string and 2d vector to store pulses
+    //
+    //for 1 - N
+    //  create field with i pulses
+    //  run minimization in order to find m (alpha)
+    //  add i and m to external buffer
+
   }
 }
-
-
