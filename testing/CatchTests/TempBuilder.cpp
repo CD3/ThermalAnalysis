@@ -62,7 +62,7 @@ double ScaledOmega(Field<double, 1> built_field, double alpha, double T0){
     return Arr(built_field.getCoordinateSystem().size(0), built_field.getCoordinateSystem().getAxis(0).data(), built_field.data());
 }
 
-double damageThreshold(Field<double, 1> built_field, double T0, double precision){
+double damageThreshold(Field<double, 1> built_field, double T0, double precision, int rounding = 0){
     // Newton's method to minimize the Arrhenius integral, so f' is the
     // integrand and f'' is approximated through a secant line centered around
     // x
@@ -70,6 +70,18 @@ double damageThreshold(Field<double, 1> built_field, double T0, double precision
     double O_U, O_M, O_L; //"Old" UML
     double dOmega_dAlpha; // secant approximation of slope at f(M)
     double dM = 0.01; // range for secant calculation
+    double goal = 1;
+    switch(rounding){
+      case -1:
+        goal -= dM; 
+      break;
+      case 1:
+        goal += dM; 
+      break;
+      default:
+        //do nothing
+      break;   
+    }
     O_U = 0;
     O_M = 0;
     O_L = 0;
@@ -192,7 +204,7 @@ TEST_CASE("Multiple Pulse Tests"){
   }
 }
 
-TEMPLATE_TEST_CASE("Accurate interpolation", "", (_1D::LinearInterpolator<double>), (_1D::CubicSplineInterpolator<double>), (_1D::MonotonicInterpolator<double>)){
+/*TEMPLATE_TEST_CASE("Accurate interpolation", "", (_1D::LinearInterpolator<double>), (_1D::CubicSplineInterpolator<double>), (_1D::MonotonicInterpolator<double>)){
   //catch 2 template tests
   SECTION("Initialize Interpolators"){
     LinearCombination<TestType> Combinator;
@@ -213,7 +225,7 @@ TEMPLATE_TEST_CASE("Accurate interpolation", "", (_1D::LinearInterpolator<double
       SECTION("Compare Results"){
         auto function = [Tinf](double time){return time < 2 ? Tinf(time) : (Tinf(time) - Tinf(time - 2));};
         //references method declared at beginning
-        string printRes = print_results(T1_vs_tLin, function);
+        string printRes = print_results(T1_vs_t, function);
         vector<double> Differences;
         for (int i = 0; i < 100; i++) {
           double dt = 5. / (100 - 1);
@@ -237,7 +249,7 @@ TEMPLATE_TEST_CASE("Accurate interpolation", "", (_1D::LinearInterpolator<double
         double MeanErr;
         //i = 1 to skipping 1/0 NaN that occurred in prev step, and calculating averages
         for(int i = 1; i < 100; i++){
-          MeanErr += LinearDifferences[i];
+          MeanErr += Differences[i];
         }
         //99 because we skipped 0 in the previous step
         MeanErr /= 99.0;
@@ -248,6 +260,7 @@ TEMPLATE_TEST_CASE("Accurate interpolation", "", (_1D::LinearInterpolator<double
     }
   }
 }
+*/
 
 TEST_CASE("Interpolator Comparison"){
   SECTION("Initialize Interpolators"){
@@ -428,7 +441,7 @@ TEST_CASE("Arrhenius"){
     CHECK(T_max == Approx((t_const)).epsilon(0.01));
   }
   SECTION("Multiple Pulse Arrhenius Tests"){
-    double N = 1024; // max number of pulses tested
+    double N = 64; // max number of pulses tested
     double t_o = 3; // rising edge to rising edge seperation (s)
     double tau = 2;
     double lambda = 10; // linear point density (1 / s)
@@ -497,6 +510,86 @@ TEST_CASE("Arrhenius"){
     //  create field with i pulses
     //  run minimization in order to find m (alpha)
     //  add i and m to external buffer
+
+  }
+  SECTION("MPE Limit Tests"){
+    std::cout << "Entered Test\n";
+    double T = 0.1;
+    double tau = 5.0e-6;
+    double N = 1682; // max number of pulses
+    double pulse_period = 5.95e-5;
+    double PRF = 1.0 / pulse_period;
+    double t_off = (T - N * tau) / N - 1; // falling edge to rising edge seperation (s)
+    double lambda = 2; // linear point density (1 / s)
+    double bodytemp = 310.0; // K
+    double t_const  = 11.95800; // K
+    double A    = 3.1e99;
+    double E_a  = 6.28e5;// J / mol
+    double R    = 8.314; // J / mol K
+    double m_i;
+    double alpha1, alpha2;
+
+    Field<double, 1> Tconst_vs_t((int)((pulse_period / tau) * lambda * 2));
+    Field<double, 1> Tinf_vs_t((int)((pulse_period / tau) * lambda * 2));
+    Field<double, 1> T1_vs_t((int)((pulse_period / tau) * lambda));
+    Field<double, 1> T2_vs_t((int)((pulse_period / tau) * lambda));
+    Field<double, 1> MPE_limit_square((int)((pulse_period / tau) * lambda * N));
+    Field<double, 1> MPE_limit_sharkfin((int)((pulse_period / tau) * 20 * N));
+
+    libArrhenius::ArrheniusIntegral<double> Arrhenius(A, E_a);
+    LinearCombination<_1D::LinearInterpolator<double>> tempBuilder;
+
+    Tconst_vs_t.setCoordinateSystem(Uniform<double>(0, 2 * pulse_period));
+    Tconst_vs_t.set_f([t_const](auto t) -> double { return t_const; });
+    Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 1e-6, 1.05));
+    Tinf_vs_t.set_f([t_const](auto t) -> double { return t_const * sqrt(t[0] / M_PI); });
+    T1_vs_t.setCoordinateSystem(Uniform<double>(0, pulse_period));
+    T2_vs_t.setCoordinateSystem(Geometric<double>(0, 1e-7, 1.05));
+    MPE_limit_square.setCoordinateSystem(Uniform<double>(0, N * pulse_period));
+    MPE_limit_sharkfin.setCoordinateSystem(Uniform<double>(0, N * pulse_period));
+
+    tempBuilder.add(Tconst_vs_t, 0, 1);
+    tempBuilder.add(Tconst_vs_t, tau, -1);
+    tempBuilder.build(T1_vs_t);
+    tempBuilder.clear();
+    std::cout << "T1_vs_t constructed";
+
+    tempBuilder.add(Tinf_vs_t, 0, 1);
+    tempBuilder.add(Tinf_vs_t, tau, -1);
+    tempBuilder.build(T2_vs_t);
+    tempBuilder.clear();
+    std::cout << "T2_vs_t constructed";
+
+    alpha1 = damageThreshold(T1_vs_t, bodytemp, 0.01, -1);
+    alpha2 = damageThreshold(T1_vs_t, bodytemp, 0.01, -1);
+    T1_vs_t *= alpha1;
+    T2_vs_t *= alpha2;
+
+    for(int i = 0; i < N; i++){
+      tempBuilder.add(T1_vs_t, i * pulse_period, 1);
+    }
+    tempBuilder.build(MPE_limit_square);
+    tempBuilder.clear();
+    std::cout << "MPE_limit_square constructed";
+
+    for(int i = 0; i < N; i++){
+      tempBuilder.add(T2_vs_t, i * pulse_period, 1);
+    }
+    tempBuilder.build(MPE_limit_sharkfin);
+    tempBuilder.clear();
+    std::cout << "MPE_limit_sharkfin constructed";
+
+    ofstream output;
+    output.open("graphs/TEST.txt");
+    output << MPE_limit_sharkfin;
+    output.close();
+    
+    system("gnuplot -p -e \'plot \"graphs/TEST.txt\" with linespoints \'");
+
+    double alpha_ = damageThreshold(MPE_limit_square, bodytemp, 0.01);
+    std::cout << "alphs: " << alpha_ << "\n";
+    // double alpha_square = damageThreshold(MPE_limit_square, bodytemp, 0.01);
+    //double alpha_sharkfin = damageThreshold(MPE_limit_sharkfin, bodytemp, 0.01);
 
   }
 }

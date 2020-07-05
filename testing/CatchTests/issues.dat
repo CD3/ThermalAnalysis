@@ -47,3 +47,7 @@ C A: clean up code, better documentation
 Reasonable, and able to be done. Anything further should come from the rest of the notes (Templating interpolator comparison, etc)
   D: (ITP) add a couple zeroes at the beginning and figure out how that works. Add a test case for "experimental improved interpolator methods"
 
+GOALS FOR TODAY:
+  Update Catch 2
+  implement a pulse that fits the specs and check the arrhenius
+  plot that shit

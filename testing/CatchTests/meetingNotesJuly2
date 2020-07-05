@@ -1,0 +1,6 @@
+LinearCombination Algorithm
+Build operation build threads and make each responsible for a section of the adding.
+
+OpenMP 
+UnitStride
+Garmin
