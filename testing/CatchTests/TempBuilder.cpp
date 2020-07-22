@@ -104,6 +104,55 @@ double damageThreshold(Field<double, 1> built_field, double T0, double precision
     return M;
 }
 
+template<typename T>
+class GeometricPeriodImp
+{
+ public:
+  GeometricPeriodImp(T min, T dx, T stretch, T period)
+  {
+    this->min     = min;
+    this->dx      = dx;
+    this->stretch = stretch;
+    this->period = period;
+    assert(stretch > 1);
+    assert(period > min);
+  }
+
+  auto operator()(size_t i, size_t N) const
+  {
+    // x[0] = xmin
+    // x[1] = xmin + dx
+    // x[2] = xmin + dx + s*dx
+    // x[3] = xmin + dx + s*dx + s*s*dx
+    // x[i] = xmin + dx*\sigma s^(i-1)
+    // which is the geometric series.
+    // determine the maximum i value of the period of the function
+    // which makes it periodic
+    
+    if(i >= N){
+      i = N-1;
+    }
+
+    int i_p = static_cast<int>(log(1 - ((period - min) * (1 - stretch) / dx)) / log(stretch));
+    std::cout << "maximum:" << i_p << "\n";
+    std::cout << "current:" << i << "\n";
+    std::cout << "modulized:" << i % i_p << "\n";
+    return (period * (i / i_p)) + min + 1. * dx * (1 - pow(1. * stretch, i % i_p)) / (1 - stretch);
+  }
+
+ protected:
+  T min, dx, period;
+  double stretch;
+};
+
+// using a factory function here so that argument types can be deduced.
+template<typename T, typename S>
+GeometricPeriodImp<T> GeometricPeriod(T min, T dx, S stretch, T period)
+{
+  return GeometricPeriodImp<T>(min, dx, stretch, period);
+}
+
+
 TEST_CASE("Pulse Construction Tests")
 {
   SECTION("Analytic Temperature Profile")
@@ -514,13 +563,14 @@ TEST_CASE("Arrhenius"){
   }
   SECTION("MPE Limit Tests"){
     std::cout << "Entered Test\n";
-    double T = 0.1;
-    double tau = 5.0e-6;
-    double N = 1682; // max number of pulses
-    double pulse_period = 5.95e-5;
-    double PRF = 1.0 / pulse_period;
+    double T = 0.1; //s
+    double tau = 5.0e-6; // s
+    int N = 1682; // max number of pulses
+//  int N = 160; // max number of pulses
+    double pulse_period = 5.95e-5; //s
+    double PRF = 1.0 / pulse_period; // 1 / s
     double t_off = (T - N * tau) / N - 1; // falling edge to rising edge seperation (s)
-    double lambda = 2; // linear point density (1 / s)
+    double lambda = 10; // linear point density (1 / s)
     double bodytemp = 310.0; // K
     double t_const  = 11.95800; // K
     double A    = 3.1e99;
@@ -529,24 +579,34 @@ TEST_CASE("Arrhenius"){
     double m_i;
     double alpha1, alpha2;
 
-    Field<double, 1> Tconst_vs_t((int)((pulse_period / tau) * lambda * 2));
-    Field<double, 1> Tinf_vs_t((int)((pulse_period / tau) * lambda * 2));
-    Field<double, 1> T1_vs_t((int)((pulse_period / tau) * lambda));
-    Field<double, 1> T2_vs_t((int)((pulse_period / tau) * lambda));
-    Field<double, 1> MPE_limit_square((int)((pulse_period / tau) * lambda * N));
-    Field<double, 1> MPE_limit_sharkfin((int)((pulse_period / tau) * 20 * N));
+    Field<double, 1> Tconst_vs_t((int)((pulse_period / tau) * lambda)); // 1 / s
+    Field<double, 1> Tinf_vs_t((int)(lambda * lambda)); // 1 / s^2
+//  Field<double, 1> Tinf_vs_t((int)((pulse_period / tau) * lambda * lambda));
+    Field<double, 1> T1_vs_t((int)((pulse_period / tau) * lambda)); // 1 / s
+    Field<double, 1> T2_vs_t((int)((lambda * lambda))); // 1 / s^2
+//  Field<double, 1> T2_vs_t((int)((pulse_period / tau) * lambda * lambda));
+    Field<double, 1> MPE_limit_square((int)((pulse_period / tau) * lambda * N)); // 1 / s
+//  Field<double, 1> MPE_limit_sharkfin((int)((pulse_period / tau) * lambda * N * 0.75)); // 1 / s
+    Field<double, 1> MPE_limit_sharkfin((int)(lambda * lambda * N)); // 1 / s
 
     libArrhenius::ArrheniusIntegral<double> Arrhenius(A, E_a);
     LinearCombination<_1D::LinearInterpolator<double>> tempBuilder;
 
     Tconst_vs_t.setCoordinateSystem(Uniform<double>(0, 2 * pulse_period));
     Tconst_vs_t.set_f([t_const](auto t) -> double { return t_const; });
-    Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, 1e-6, 1.05));
+
+    Tinf_vs_t.setCoordinateSystem(Geometric<double>(0, tau * 0.5, 1.15));
+//  Tinf_vs_t.setCoordinateSystem(Uniform<double>(0, N * pulse_period));
     Tinf_vs_t.set_f([t_const](auto t) -> double { return t_const * sqrt(t[0] / M_PI); });
+
     T1_vs_t.setCoordinateSystem(Uniform<double>(0, pulse_period));
-    T2_vs_t.setCoordinateSystem(Geometric<double>(0, 1e-7, 1.05));
+
+//  T2_vs_t.setCoordinateSystem(Uniform<double>(0, N * pulse_period * 0.5));
+    T2_vs_t.setCoordinateSystem(Geometric<double>(0, tau * 0.5, 1.15));
+
     MPE_limit_square.setCoordinateSystem(Uniform<double>(0, N * pulse_period));
-    MPE_limit_sharkfin.setCoordinateSystem(Uniform<double>(0, N * pulse_period));
+//  MPE_limit_sharkfin.setCoordinateSystem(Uniform<double>(0, N * pulse_period));
+    MPE_limit_sharkfin.setCoordinateSystem(GeometricPeriod<double>(0, tau * 0.5, 1.15, pulse_period));
 
     tempBuilder.add(Tconst_vs_t, 0, 1);
     tempBuilder.add(Tconst_vs_t, tau, -1);
@@ -565,31 +625,49 @@ TEST_CASE("Arrhenius"){
     T1_vs_t *= alpha1;
     T2_vs_t *= alpha2;
 
-    for(int i = 0; i < N; i++){
-      tempBuilder.add(T1_vs_t, i * pulse_period, 1);
+    tempBuilder.add(T1_vs_t, 0, 1);
+    for(int i = 1; i < N; i++){
+      tempBuilder.add(i * pulse_period, 1);
     }
     tempBuilder.build(MPE_limit_square);
     tempBuilder.clear();
     std::cout << "MPE_limit_square constructed";
 
-    for(int i = 0; i < N; i++){
-      tempBuilder.add(T2_vs_t, i * pulse_period, 1);
+    tempBuilder.add(T2_vs_t, 0, 1);
+    for(int i = 1; i < N; i++){
+      tempBuilder.add(i * pulse_period, 1);
     }
     tempBuilder.build(MPE_limit_sharkfin);
     tempBuilder.clear();
     std::cout << "MPE_limit_sharkfin constructed";
 
-    ofstream output;
-    output.open("graphs/TEST.txt");
-    output << MPE_limit_sharkfin;
-    output.close();
-    
-    system("gnuplot -p -e \'plot \"graphs/TEST.txt\" with linespoints \'");
+    {
+      ofstream output;
+      output.open("graphs/TEST.txt");
+      output << Tinf_vs_t;
+      output.close();
+    }
+  
+    {
+      ofstream output;
+      output.open("graphs/PotentialHazardSharkfin.txt");
+      output << MPE_limit_sharkfin;
+      output.close();
+    }
+    {
+      ofstream output;
+      output.open("graphs/PotentialHazardSquare.txt");
+      output << MPE_limit_square;
+      output.close();
+    }
 
+    system("gnuplot -p -e \'plot \"graphs/TEST.txt\" with linespoints \'");
+    
     double alpha_ = damageThreshold(MPE_limit_square, bodytemp, 0.01);
-    std::cout << "alphs: " << alpha_ << "\n";
+    double alpha2_ = damageThreshold(MPE_limit_sharkfin, bodytemp, 0.01);
+    std::cout << "\nalphas (square, shark): ( " << alpha_ << ", " << alpha2_ << ")\n";
     // double alpha_square = damageThreshold(MPE_limit_square, bodytemp, 0.01);
     //double alpha_sharkfin = damageThreshold(MPE_limit_sharkfin, bodytemp, 0.01);
-
   }
 }
+

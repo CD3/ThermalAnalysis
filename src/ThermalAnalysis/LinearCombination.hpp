@@ -84,10 +84,10 @@ class LinearCombination
 
   // adds a profile with offset t and alpha scale referencing the last unique
   // interpolator generated
-  template <typename F, typename T, typename S>
+  template <typename T, typename S>
   void add(T t, S scale)
   {
-    interp_references.push_back(&uniqueInterps[uniqueInterps.size() - 1]);
+    interp_references.push_back(&uniqueInterps.back());
     offsets.push_back(t);
     alphas.push_back(scale);
   }
@@ -113,7 +113,9 @@ class LinearCombination
   void build(F& field)
   {
     auto t1 = Clock::now();
-    field.set_f([this, &field](auto t) mutable{
+    field.set_f(
+    #pragma omp parallel
+    [this, &field](auto t) mutable{
       auto &local_alph = (this->alphas);
       auto &local_off = (this->offsets);
       auto &local_interps = (this->interp_references);
@@ -122,8 +124,9 @@ class LinearCombination
       for(int i = 0; i < t.size(); i++){
         // i is always 0, this is just a way to unpack the list while not breaking under
         double Temp = 0;
+        #pragma omp parallel
+        #pragma omp for
         for(int j = 0; j < local_interps.size(); j++){
-          currentType testInterp = (*local_interps[j]);
           Temp += (*local_interps[j])(t[i] - offsets[j]) * local_alph[j];
           /*string str_loc = "Currently in:\nprofile #" + std::to_string(j);
           string str_ao  = "\nalpha = " + std::to_string(local_alph[j]) + "\noffset = " + std::to_string(local_off[j]);
