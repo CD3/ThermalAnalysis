@@ -1,9 +1,0 @@
-generate text file with baseline of 37C, spike to 47C for 0.5 seconds, drops down to 37C for 0.5s.
-Evaluate integral is multiplying by constant
-Solve for temperature rise scale factor that would provide a temperature of 1
-(11) T = T_max * alpha + T_0
-
-extract datapoints from pdf
-
-Equation 12 derived
-unit 12 tests threshold method works
