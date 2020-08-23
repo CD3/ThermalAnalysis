@@ -31,6 +31,11 @@ pmm(
   BINCRAFTERS
   COMMUNITY
   )
+else()
+if( EXISTS "${CMAKE_BINARY_DIR}/conanbuildinfo.cmake" )
+  include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+  conan_basic_setup()
+endif()
 endif()
  find_package( Boost REQUIRED )
  find_package( libField REQUIRED )
