@@ -126,6 +126,22 @@ If everything went well, you should see a directory named `testBin/` that contai
 ```
 Congratulations! Have fun.
 
+### Building the Applications
+
+Command line applications are provided to expose some of the library capabilities for data analysis. To build the applications,
+pass cmake the `applications/` directory instead of the top-level directory.
+```
+$ cd ThermalAnalysis
+$ mkdir build
+$ cd build
+$ conan install .. --build missing
+$ source activate.sh
+(conanenv) $ cmake ../applications
+(conanenv) $ cmake --build .
+```
+Application executable will be written to the `bin/` directory.
+
+
 ## Dependencies
 
 `TheramlAnalysis` uses several other libraries, mostly written by Dr. Clark, with varying degrees of documentation. You can
@@ -133,6 +149,8 @@ consult the README and unit tests for each library for information on how to use
 
 - libField https://github.com/CD3/libField
 - libInterpolate https://github.com/CD3/libInterpolate
+- libIntegrate https://github.com/CD3/libIntegrate
 - libArrhenius https://github.com/CD3/libArrhenius
 - BoostUnitDefinitions https://github.com/CD3/BoostUnitDefinitions
-
+- UnitConvert https://github.com/CD3/UnitConvert
+- yaml-cpp https://github.com/jbeder/yaml-cpp
