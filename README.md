@@ -11,7 +11,7 @@ privileges, or ask your system administrator to install them for you. It is like
 that they are already installed.
 
 ```
-$ sudo apt install python3 python3-pip git
+$ sudo apt install python3 python3-pip git cmake
 ```
 Everything else can be installed to your user account and does not require admin
 privilege.
@@ -115,9 +115,8 @@ $ cd ThermalAnalysis
 $ mkdir build
 $ cd build
 $ conan install .. --build missing
-$ source activate.sh
-(conanenv) $ cmake ..
-(conanenv) $ cmake --build .
+$ cmake ..
+$ cmake --build .
 ```
 If everything went well, you should see a directory named `testBin/` that contains a file named
 `ThermalAnalysis_CatchTests`. You can now run the unit tests.
@@ -135,9 +134,8 @@ $ cd ThermalAnalysis
 $ mkdir build
 $ cd build
 $ conan install .. --build missing
-$ source activate.sh
-(conanenv) $ cmake ../applications
-(conanenv) $ cmake --build .
+$ cmake ../applications
+$ cmake --build .
 ```
 Application executable will be written to the `bin/` directory.
 
