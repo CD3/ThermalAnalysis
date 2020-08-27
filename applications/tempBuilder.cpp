@@ -7,6 +7,9 @@
 #include <UnitConvert/GlobalUnitRegistry.hpp>
 #include <BoostUnitDefinitions/Units.hpp>
 
+#include <iostream>
+#include <fstream>
+
 namespace po = boost::program_options;
 using namespace boost::units;
 
@@ -16,7 +19,8 @@ int main(int argc, const char** argv)
   // define command line options
   po::options_description po_opts("Options");
   po_opts.add_options()("help,h", "print help message.")(
-      "verbose,v", po::value<int>()->implicit_value(0), "verbose level.");
+      "verbose,v", po::value<int>()->implicit_value(0), "verbose level.")(
+      "write-example-config,w", po::value<std::string>(), "Write an example configuration file and exit.");
 
   // now define our arguments.
   po::options_description po_args("Arguments");
@@ -45,12 +49,42 @@ int main(int argc, const char** argv)
 
   if (argc == 1 || vm.count("help")) {
     std::cout << R"EOL(A command line application for adding thermal profiles (Time-temperature history) to build complex profiles.
-
 tempBuilder can be used to construct thermal profiles from complex temporal laser exposures from profiles generated from simple exposures. For
 example, the thermal profile for a multiple-pulse exposure can be generated from the profile for a single-pulse exposure.
 )EOL";
     return 0;
   }
+
+
+  if( vm.count("write-example-config") )
+  {
+    std::string text = R"EOL(
+combinations:
+  - input: Tvst.txt
+    output: Tvst-1.txt
+    terms:
+      - time: 0.1 s
+        scale: 1
+      - time: 0.2 s
+        scale: 1
+      - time: 0.5 s
+        scale: 0.5
+)EOL";
+
+    if( vm["write-example-config"].as<std::string>() == "-" )
+    {
+      std::cout << text;
+    }
+    else{
+      std::ofstream out(vm["write-example-config"].as<std::string>().c_str());
+      out << text;
+    }
+
+
+    return 0;
+
+  }
+
 
   auto &ureg = UnitConvert::getGlobalUnitRegistry();
 
