@@ -43,6 +43,7 @@ endif()
  find_package( libIntegrate REQUIRED )
  find_package( libArrhenius REQUIRED )
  find_package( BoostUnitDefinitions REQUIRED )
+ find_package( gputils REQUIRED )
  find_package( OpenMP )
 
 string( REGEX REPLACE "^lib" "" LIB_NAME ${PROJECT_NAME} )
@@ -67,6 +68,7 @@ target_link_libraries(${LIB_NAME}
                         libIntegrate::Integrate
                         libArrhenius::Arrhenius
                         BoostUnitDefinitions::BoostUnitDefinitions
+                        gputils::gputils
                         $<$<TARGET_EXISTS:OpenMP::OpenMP_CXX>:OpenMP::OpenMP_CXX>
                      )
 
