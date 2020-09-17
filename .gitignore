@@ -3,3 +3,6 @@ build-*/
 .*.swp
 .git-*
 compile_commands.json
+*inputs*
+*outputs*
+*configs*

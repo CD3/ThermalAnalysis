@@ -114,7 +114,6 @@ class LinearCombination
   {
     auto t1 = Clock::now();
     field.set_f(
-    #pragma omp parallel
     [this, &field](auto t) mutable{
       auto &local_alph = (this->alphas);
       auto &local_off = (this->offsets);
@@ -124,7 +123,6 @@ class LinearCombination
       for(int i = 0; i < t.size(); i++){
         // i is always 0, this is just a way to unpack the list while not breaking under
         double Temp = 0;
-        #pragma omp parallel
         #pragma omp for
         for(int j = 0; j < local_interps.size(); j++){
           Temp += (*local_interps[j])(t[i] - offsets[j]) * local_alph[j];
@@ -137,6 +135,7 @@ class LinearCombination
         }
         return Temp; 
       }
+      return 0.0;
     });
 
     auto t2 = Clock::now();

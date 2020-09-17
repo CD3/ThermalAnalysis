@@ -6,6 +6,7 @@
 #include <UnitConvert.hpp>
 #include <UnitConvert/GlobalUnitRegistry.hpp>
 #include <BoostUnitDefinitions/Units.hpp>
+#include <libField/HDF5.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -15,6 +16,17 @@ using namespace boost::units;
 
 int main(int argc, const char** argv)
 {
+  // quick shortcut to create an input file
+  Field<double, 1> delete_later(100);
+  delete_later.setCoordinateSystem(Geometric<double>(0, 0.001, 1.05));
+  delete_later.set_f([](auto t){return sqrt(t[0]);});
+  {
+    ofstream output_stream;
+    output_stream.open("Tvst.txt");
+    output_stream << delete_later;
+    output_stream.close();
+  }
+  hdf5write("Tvst.h5", delete_later);
 
   // define command line options
   po::options_description po_opts("Options");
@@ -60,13 +72,20 @@ example, the thermal profile for a multiple-pulse exposure can be generated from
   {
     std::string text = R"EOL(
 combinations:
-  - input: Tvst.txt
-    output: Tvst-1.txt
+  - input: 
+      file_name: Tvst.h5
+      format: h5
+    output: 
+      file_name: Tvst-1.txt
+      resolution: 
+        dt: 1 ms
+        t_min: 0 s
+        t_max: 2 s
     terms:
       - time: 0.1 s
         scale: 1
       - time: 0.2 s
-        scale: 1
+        scale: 3
       - time: 0.5 s
         scale: 0.5
 )EOL";
@@ -103,28 +122,67 @@ combinations:
 
       for( auto combination : config["combinations"] )
       {
-        std::string input = combination["input"].as<std::string>();
-        std::string output = combination["output"].as<std::string>();
+        auto output_field = combination["output"];
+        auto input_field = combination["input"];
+        auto res_field = output_field["resolution"];
+        // yaml shenanigans
+        std::string input = input_field["file_name"].as<std::string>();
+        std::string input_format = input_field["format"].as<std::string>();
+        std::string output = output_field["file_name"].as<std::string>();
+        std::string output_format = output_field["format"].as<std::string>();
+        // for readability/limiting line length
+        quantity<t::s> dt = ureg.makeQuantity<double>( res_field["dt"].as<std::string>() ).to<t::s>();
+        quantity<t::s> t_min = ureg.makeQuantity<double>( res_field["t_min"].as<std::string>() ).to<t::s>();
+        quantity<t::s> t_max = ureg.makeQuantity<double>( res_field["t_max"].as<std::string>() ).to<t::s>();
+        
+        LinearCombination<_1D::CubicSplineInterpolator<double>> tempBuilder;
+
+        Field<double, 1> T_output((int)((t_max.value() - t_min.value()) / dt.value()));
+        Field<double, 1> T_i;
+
+        T_output.setCoordinateSystem( Uniform<double>(t_min.value(), t_max.value()) );
 
         if(!combination["terms"])
         {
           std::cout << "WARNING: No \"terms \" section found in combination. Nothing will be done." << std::endl;
         }
+        //need to set coordinate system before building
+        
+        // reading Field from file
+        std::cout << "Reading from " << input;
+        if("txt" == input_format ){
+          //no >> operator
+          //T_i << std::cin(input);
+          // insert way to read from file
+        } else if(input_format == std::string("h5")){
+          hdf5read(input, T_i);
+        } else {
+          std::cout << "WARNING: No known input file format found in output. Nothing will be done." << std::endl;
+          continue;
+        }
+        
         for( auto term : combination["terms"] )
         {
           // use UnitConvert library to allow users to specify quantities in any unit they want
           quantity<t::s> start_time = ureg.makeQuantity<double>( term["time"].as<std::string>() ).to<t::s>();
           auto scale = term["scale"].as<double>();
-
-
-          /* read thermal profile in from input */
-          /* build linear combination */
-          /* write to output */
-          /* vvv delete these lines vvv */
-          std::cout << "start_time: " << start_time << std::endl;
-          std::cout << "scale: " << scale << std::endl;
+          tempBuilder.add(T_i, start_time.value(), scale);
         }
 
+        tempBuilder.build(T_output);
+
+        // Writing generated Field data to file
+        if(output_format == std::string("txt")){
+          ofstream output_stream;
+          output_stream.open(output);
+          output_stream << T_output;
+          output_stream.close();
+        } else if(output_format == std::string("h5")){
+          hdf5write(output, T_i);
+        } else {
+          std::cout << "WARNING: No known output file format found in output. Nothing will be done." << std::endl;
+          continue;
+        }
 
       }
 
