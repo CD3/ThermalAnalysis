@@ -43,6 +43,7 @@ endif()
  find_package( libIntegrate REQUIRED )
  find_package( libArrhenius REQUIRED )
  find_package( BoostUnitDefinitions REQUIRED )
+ find_package( OpenMP )
 
 string( REGEX REPLACE "^lib" "" LIB_NAME ${PROJECT_NAME} )
 add_library( ${LIB_NAME} )
@@ -66,6 +67,7 @@ target_link_libraries(${LIB_NAME}
                         libIntegrate::Integrate
                         libArrhenius::Arrhenius
                         BoostUnitDefinitions::BoostUnitDefinitions
+                        $<$<TARGET_EXISTS:OpenMP::OpenMP_CXX>:OpenMP::OpenMP_CXX>
                      )
 
 if( ${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR} AND BUILD_UNIT_TESTS)

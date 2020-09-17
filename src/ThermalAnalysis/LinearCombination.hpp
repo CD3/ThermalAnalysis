@@ -123,7 +123,6 @@ class LinearCombination
       for(int i = 0; i < t.size(); i++){
         // i is always 0, this is just a way to unpack the list while not breaking under
         double Temp = 0;
-        #pragma omp for
         for(int j = 0; j < local_interps.size(); j++){
           Temp += (*local_interps[j])(t[i] - offsets[j]) * local_alph[j];
           /*string str_loc = "Currently in:\nprofile #" + std::to_string(j);

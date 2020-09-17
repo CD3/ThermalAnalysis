@@ -6,3 +6,4 @@ compile_commands.json
 *inputs*
 *outputs*
 *configs*
+.clangd/
