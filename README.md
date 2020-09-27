@@ -1,6 +1,14 @@
 # ThermalAnalysis
 
-A C++ library for analyzing thermal profiles.
+A C++ library for analyzing thermal profiles (for example, from laser exposures).
+
+This library is currently being developed by Daniel Huantes and CD Clark III from Fort Hays State University as part of student project.
+
+## Command Line Tools
+
+`tempBuilder`: A utility for creating new thermal profiles from linear combinations of existing thermal profiles. Useful for quickly generating multiple-pulse thermal profiles.
+
+`thermal-damage-trender`: Quickly computes the damage threshold as a function of exposure duration for a system from a single, long exposure, thermal profile.
 
 ## Getting Started
 

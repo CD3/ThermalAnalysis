@@ -1,5 +1,6 @@
 #include <ThermalAnalysis/LinearCombination.hpp>
 #include <boost/program_options.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
 #include <libField/HDF5.hpp>
 #include <gputils/io.hpp>
@@ -36,6 +37,7 @@ int main(int argc, const char** argv)
       "verbose,v", po::value<int>()->implicit_value(0), "verbose level.")
       ("Ea", po::value<double>()->default_value(6.28e5), "Activation energy.")
       ("A",  po::value<double>()->default_value(3.1e99), "Frequency factor.")
+      ("write-profiles", "Write damage threshold profiles.")
       ;
 
   // now define our arguments.
@@ -119,6 +121,17 @@ int main(int argc, const char** argv)
 
       double threshold = calc(Tvst2.size(), Tvst2.getAxis(0).data(),Tvst2.data() );
       std::cout << tau << " " << threshold << std::endl;
+      
+      if(vm.count("write-profiles"))
+      {
+        std::string ofile = file+"-"+boost::lexical_cast<std::string>(tau)+"-threshold";
+        std::ofstream out(ofile.c_str());
+        Tvst2 -= T0;
+        Tvst2 *= threshold;
+        Tvst2 += T0;
+        out << Tvst2;
+      }
+
 
     }
 
