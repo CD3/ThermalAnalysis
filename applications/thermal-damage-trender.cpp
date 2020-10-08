@@ -2,6 +2,7 @@
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
 #include <libField/HDF5.hpp>
 #include <gputils/io.hpp>
 #include <libArrhenius/Arrhenius.hpp>
@@ -39,6 +40,7 @@ int main(int argc, const char** argv)
     ("A",  po::value<double>()->default_value(3.1e99), "Frequency factor [1/s].")
     ("temperature-bias",  po::value<double>()->default_value(0.0), "A temperature offset that will be added to the temperature history to convert it to absolute temperature.")
     ("exposure",  po::value<double>()->default_value(1.0), "The exposure that gave the temperature history. I.e., if the temperature history corresponds to a 2.5 W exposure, then computed damage threshold scaling factors will be multiplied by 2.5 and the threshold values will correspond to power.")
+    ("taus",  po::value<string>(), "Directly specify the exposure durations to run (as a comma separated list) instead of computing them [s].")
     ("tau-min",  po::value<double>()->default_value(10e-6), "The minimum exposure duration to compute the damage threshold for [s].")
     ("tau-max",  po::value<double>(), "The maximum exposure duration to compute the damage threshold for. The default is to use the entire exposure, but this may not be accurate if the cool down period is important [s].")
     ("tau-reduction-factor",  po::value<double>()->default_value(2), "The reduction factor between consecutive exposure duration. I.e., a reduction factor of 2 would cut the exposure duration in half each time.")
@@ -86,8 +88,8 @@ int main(int argc, const char** argv)
     > ./thermal-damage-trender --A 3.1e98 --Ea 6.27e5 ./Tvst.txt
 
     This will start printing out the damage threshold scaling factor as a function of exposure duration.
-    
-    
+
+
 )EOL";
 
     std::cout << po_opts << std::endl;
@@ -126,14 +128,28 @@ int main(int argc, const char** argv)
 
     // calculate how many
     std::vector<double> taus;
-    taus.push_back(tmax-tmin);
-    if( vm.count("tau-max") > 0 )
+
+    if( vm.count("taus") > 0 )
     {
-      taus[0] = vm["tau-max"].as<double>();
+      std::vector<std::string> toks;
+      boost::split(toks, vm["taus"].as<std::string>(),boost::is_any_of(","),boost::token_compress_on);
+      for( auto& tok : toks )
+      {
+        taus.push_back( boost::lexical_cast<double>(tok));
+      }
+
     }
-    while( taus[taus.size()-1] > vm["tau-min"].as<double>() )
+    else
     {
-      taus.push_back(taus[taus.size()-1]/vm["tau-reduction-factor"].as<double>());
+      taus.push_back(tmax-tmin);
+      if( vm.count("tau-max") > 0 )
+      {
+        taus[0] = vm["tau-max"].as<double>();
+      }
+      while( taus[taus.size()-1] > vm["tau-min"].as<double>() )
+      {
+        taus.push_back(taus[taus.size()-1]/vm["tau-reduction-factor"].as<double>());
+      }
     }
 
     double dt = 10e-6;
