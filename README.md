@@ -10,6 +10,8 @@ This library is currently being developed by Daniel Huantes and CD Clark III fro
 
 `thermal-damage-trender`: Quickly computes the damage threshold as a function of exposure duration for a system from a single, long exposure, thermal profile.
 
+See instructions below for building the applications.
+
 ## Getting Started
 
 #### Install System Tools
