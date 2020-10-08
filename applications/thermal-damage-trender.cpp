@@ -35,12 +35,12 @@ int main(int argc, const char** argv)
   po::options_description po_opts("Options");
   po_opts.add_options()("help,h", "print help message.")(
       "verbose,v", po::value<int>()->implicit_value(0), "verbose level.")
-    ("Ea", po::value<double>()->default_value(6.28e5), "Activation energy.")
-    ("A",  po::value<double>()->default_value(3.1e99), "Frequency factor.")
+    ("Ea", po::value<double>()->default_value(6.28e5), "Activation energy [J/mol].")
+    ("A",  po::value<double>()->default_value(3.1e99), "Frequency factor [1/s].")
     ("temperature-bias",  po::value<double>()->default_value(0.0), "A temperature offset that will be added to the temperature history to convert it to absolute temperature.")
     ("exposure",  po::value<double>()->default_value(1.0), "The exposure that gave the temperature history. I.e., if the temperature history corresponds to a 2.5 W exposure, then computed damage threshold scaling factors will be multiplied by 2.5 and the threshold values will correspond to power.")
-    ("tau-min",  po::value<double>()->default_value(10e-6), "The minimum exposure duration to compute the damage threshold for.")
-    ("tau-max",  po::value<double>(), "The maximum exposure duration to compute the damage threshold for. The default is to use the entire exposure, but this may not be accurate if the cool down period is important.")
+    ("tau-min",  po::value<double>()->default_value(10e-6), "The minimum exposure duration to compute the damage threshold for [s].")
+    ("tau-max",  po::value<double>(), "The maximum exposure duration to compute the damage threshold for. The default is to use the entire exposure, but this may not be accurate if the cool down period is important [s].")
     ("tau-reduction-factor",  po::value<double>()->default_value(2), "The reduction factor between consecutive exposure duration. I.e., a reduction factor of 2 would cut the exposure duration in half each time.")
     ("dt",  po::value<double>()->default_value(10e-6), "Time resolution to use for generated temperature histories.")
     ("write-profiles", "Write damage threshold profiles.")
@@ -49,7 +49,7 @@ int main(int argc, const char** argv)
   // now define our arguments.
   po::options_description po_args("Arguments");
   po_args.add_options()
-    ("thermal-profiles"  , po::value<std::vector<std::string>>()->composing(), "Text files containing thermal profiles.")
+    ("thermal-profiles"  , po::value<std::vector<std::string>>()->composing(), "Text files containing thermal profiles. Temperature should be expressed in Kelvin.")
     ;
 
   // combine the options and arguments into one option list.
@@ -72,8 +72,25 @@ int main(int argc, const char** argv)
   po::notify(vm);
 
   if (argc == 1 || vm.count("help")) {
-    std::cout << R"EOL(Coming soon.
+    std::cout << R"EOL(
+    A small utility to quickly compute the damage threshold vs. exposure duration from a single temperature history computed from a long exposure.
+
+    For the linear heat equation, the temperature rise resulting from a short exposure can be computed from the temperature rise resulting from a long exposure by
+    linear combination. Even for the Penne's bioheat equation, the non-linear blood perfusion term has a small effect on the temeprature rise during an exposure, and
+    linearity can be assumed.
+
+    To run the tool, simply pass a file containing the temperature history (plain text file with time in the first column and temperature in the second column).
+    By default, the Welch-Polhamus Arrhenius coefficients will be used, but these can be set wit the --Ea and --A options. For example, so use the Henruques
+    coefficients (used fo skin), run
+
+    > ./thermal-damage-trender --A 3.1e98 --Ea 6.27e5 ./Tvst.txt
+
+    This will start printing out the damage threshold scaling factor as a function of exposure duration.
+    
+    
 )EOL";
+
+    std::cout << po_opts << std::endl;
     return 0;
   }
 
