@@ -112,7 +112,6 @@ class LinearCombination
   template <typename F>
   void build(F& field)
   {
-    auto t1 = Clock::now();
     field.set_f(
     [this, &field](auto t) mutable{
       auto &local_alph = (this->alphas);
@@ -125,20 +124,12 @@ class LinearCombination
         double Temp = 0;
         for(int j = 0; j < local_interps.size(); j++){
           Temp += (*local_interps[j])(t[i] - offsets[j]) * local_alph[j];
-          /*string str_loc = "Currently in:\nprofile #" + std::to_string(j);
-          string str_ao  = "\nalpha = " + std::to_string(local_alph[j]) + "\noffset = " + std::to_string(local_off[j]);
-          string str_interp = "\nraw interp = " + std::to_string((*local_interps[j])(t[i]));
-          string str_adj = "\nadj interp = " + std::to_string((*local_interps[j])(t[i]) * local_alph[j]);
-          string sout = str_loc + str_ao + str_interp + str_adj + "\n\n------------------------------------\n ";
-          std::cout << sout;*/
         }
         return Temp; 
       }
       return 0.0;
     });
 
-    auto t2 = Clock::now();
-    std::cout << "\nTime to complete build process: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() << " nanoseconds\n";
     return;
   }
 
