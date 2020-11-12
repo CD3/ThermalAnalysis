@@ -7,16 +7,28 @@
 #include <UnitConvert/GlobalUnitRegistry.hpp>
 #include <BoostUnitDefinitions/Units.hpp>
 #include <libField/HDF5.hpp>
-
 #include <iostream>
 #include <fstream>
 
 namespace po = boost::program_options;
 using namespace boost::units;
+/*
+string operator>>(string &input, string name){
+  string lineText;
+  ifstream readFile(input);
+  while(getline (readFile, lineText)){
+    std::cout << lineText;
+  }
+  lineText << input;
+  int b = 0;
+  return lineText; 
+}
+*/
 
 int main(int argc, const char** argv)
 {
   // quick shortcut to create an input file
+  /*
   Field<double, 1> delete_later(100);
   delete_later.setCoordinateSystem(Geometric<double>(0, 0.001, 1.05));
   delete_later.set_f([](auto t){return sqrt(t[0]);});
@@ -27,6 +39,7 @@ int main(int argc, const char** argv)
     output_stream.close();
   }
   hdf5write("Tvst.h5", delete_later);
+  */
 
   // define command line options
   po::options_description po_opts("Options");
@@ -104,11 +117,13 @@ combinations:
 
   }
 
-
   auto &ureg = UnitConvert::getGlobalUnitRegistry();
 
   for( auto file : vm["config-files"].as<std::vector<std::string>>() )
   {
+
+//    ReadFile >> a;
+
     if( boost::filesystem::exists(file) )
     {
 
@@ -122,25 +137,49 @@ combinations:
 
       for( auto combination : config["combinations"] )
       {
+        // yaml shenanigans to obtain relevant values from config files
         auto output_field = combination["output"];
         auto input_field = combination["input"];
-        auto res_field = output_field["resolution"];
-        // yaml shenanigans
+        auto disc_field = output_field["discretization"];
         std::string input = input_field["file_name"].as<std::string>();
         std::string input_format = input_field["format"].as<std::string>();
         std::string output = output_field["file_name"].as<std::string>();
         std::string output_format = output_field["format"].as<std::string>();
-        // for readability/limiting line length
-        quantity<t::s> dt = ureg.makeQuantity<double>( res_field["dt"].as<std::string>() ).to<t::s>();
-        quantity<t::s> t_min = ureg.makeQuantity<double>( res_field["t_min"].as<std::string>() ).to<t::s>();
-        quantity<t::s> t_max = ureg.makeQuantity<double>( res_field["t_max"].as<std::string>() ).to<t::s>();
+        std::string disc_type = disc_field["type"].as<std::string>();
+        // discretization initializations
+        //needs organization
+        //as of rn all discretizers have a dt and t_min
+        int N;
+        Field<double, 1> T_output;
+        quantity<t::s> dt = ureg.makeQuantity<double>( disc_field["dt"].as<std::string>() ).to<t::s>();
+        quantity<t::s> t_min = ureg.makeQuantity<double>( disc_field["t_min"].as<std::string>() ).to<t::s>();
+        quantity<t::s> t_max = ureg.makeQuantity<double>( disc_field["t_max"].as<std::string>() ).to<t::s>();
+        double val_dt = dt.value();
+        double val_t_min = t_min.value();
+        double val_t_max = t_max.value();
+        if (disc_type == "uniform"){
+          N = (int)((t_max.value() - t_min.value()) / dt.value());
+          T_output = Field<double, 1>(N);
+          T_output.setCoordinateSystem( Uniform<double>(t_min.value(), t_max.value()) );
+        } else if (disc_type == "geometric") {
+          quantity<t::s> stretch = ureg.makeQuantity<double>( disc_field["stretch"].as<std::string>() ).to<t::s>();
+          double s = stretch.value();
+          N = (int) (log(1.0 - (( (val_t_max - val_t_min) * (1.0 - s)) / val_dt)) / log(s));
+        } else if (disc_type == "geometric periodic") {
+          quantity<t::s> stretch = ureg.makeQuantity<double>( disc_field["stretch"].as<std::string>() ).to<t::s>();
+          quantity<t::s> period = ureg.makeQuantity<double>( disc_field["period"].as<std::string>() ).to<t::s>();
+          double s = stretch.value();
+          double T = period.value();
+          N = (int) (((val_t_max - val_t_min) / T) * log(1.0 - (( (T - val_t_min) * (1.0 - s)) / val_dt)) / log(s));
+        } else {
+          std::cout << "WARNING: No recognized type found in discretization. Nothing will be done." << std::endl;
+          continue;
+        }
         
         LinearCombination<_1D::CubicSplineInterpolator<double>> tempBuilder;
 
-        Field<double, 1> T_output((int)((t_max.value() - t_min.value()) / dt.value()));
         Field<double, 1> T_i;
 
-        T_output.setCoordinateSystem( Uniform<double>(t_min.value(), t_max.value()) );
 
         if(!combination["terms"])
         {
@@ -154,6 +193,10 @@ combinations:
           //no >> operator
           //T_i << std::cin(input);
           // insert way to read from file
+          std::cout << "no segfault!" << "\n";
+          //T_i << std::cin(input);
+          std::cout << "no segfault!" << "\n";
+
         } else if(input_format == std::string("h5")){
           hdf5read(input, T_i);
         } else {

@@ -483,10 +483,8 @@ TEST_CASE("Arrhenius"){
       std::cout << "final Omega: " << O_M << " at alpha = " << M << "\n";
     }
     double m_method = damageThreshold(T_const_pulse_vs_t, bodytemp, 0.01);
-
     double tau = 2;
     double T_max = (1.0 / m) * ((E_a / (R * log(A * tau))) - bodytemp);
-    double log_test = log(10);
     CHECK(T_max == Approx((t_const)).epsilon(0.01));
   }
   SECTION("Multiple Pulse Arrhenius Tests"){
