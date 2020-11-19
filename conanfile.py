@@ -20,7 +20,7 @@ class ConanBuild(ConanFile):
         'boost:without_graph_parallel': True,
         'boost:without_iostreams': True,
         'boost:without_locale': True,
-        'boost:without_log': True,
+        'boost:without_log': False,
         'boost:without_math': True,
         'boost:without_mpi': True,
         'boost:without_program_options': False,
