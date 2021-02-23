@@ -14,15 +14,13 @@ typedef std::chrono::high_resolution_clock Clock;
 template<class currentType>
 class LinearCombination
 {
- public: //using currentType = _1D::LinearInterpolator<double>;   //using currentType = _1D::CubicSplineInterpolator<double>; //using currentType = _1D::MonotonicInterpolator<double>; 
+ public:
   vector<double> alphas;
   vector<double> offsets;
   vector<int> FieldIDs;
   vector<currentType> interpolators;//holds only unique interpolators
   std::map<const Field<double,1>*, currentType*> existenceMap;//maps fields to interpolators, used to check if creating new interpolator is necessary
   vector<currentType> uniqueInterps;//holds only unique interpolators
-//vector<currentType> testInterps;//holds only unique interpolators
-  //vector<const currentType*> interp_references;//contains references to interpolators, length is number of times add has been called
   vector<currentType*> interp_references;//contains references to interpolators, length is number of times add has been called
   currentType new_interp;
 

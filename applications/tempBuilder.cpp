@@ -1,6 +1,9 @@
 #include <ThermalAnalysis/LinearCombination.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/optional.hpp>
+#include <boost/optional/optional_io.hpp>
 #include <yaml-cpp/yaml.h>
 #define UNITCONVERT_NO_BACKWARD_COMPATIBLE_NAMESPACE
 #include <UnitConvert.hpp>
@@ -9,6 +12,9 @@
 #include <libField/HDF5.hpp>
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <exception>
+#include <gputils/io.hpp>
 
 namespace po = boost::program_options;
 using namespace boost::units;
@@ -24,6 +30,52 @@ string operator>>(string &input, string name){
   return lineText; 
 }
 */
+
+struct ItemNotFound
+{
+  std::string item;
+};
+
+template<typename R, typename N, typename I>
+auto get_(const N& node, I b, I e, boost::optional<R> def = boost::none)
+{
+  auto elem = *b;
+  b++;
+  if(node[elem])
+  {
+    if( b == e )
+      return node[elem].template as<R>();
+    
+    return get_(node[elem],b,e,def);
+  }
+
+  if(def)
+  {
+    return def.value();
+  }
+
+  throw ItemNotFound{elem};
+
+  return def.value();
+
+}
+template<typename R, typename N>
+auto get(const N& node, std::string key, boost::optional<R> def = boost::none)
+{
+  std::vector<std::string> key_elements;
+  boost::split(key_elements, key, boost::is_any_of("/"));
+  try{
+  return get_<R>(node, key_elements.begin(), key_elements.end(), def);
+  }
+  catch( ItemNotFound e)
+  {
+    std::stringstream out;
+    out << "Could not find element '"<< e.item <<"' when looking for key '" << key <<"', which is required. Exiting now.";
+    std::cout << out.str() << std::endl;
+    exit(1);
+  }
+  return R();
+}
 
 int main(int argc, const char** argv)
 {
@@ -77,6 +129,7 @@ int main(int argc, const char** argv)
 tempBuilder can be used to construct thermal profiles from complex temporal laser exposures from profiles generated from simple exposures. For
 example, the thermal profile for a multiple-pulse exposure can be generated from the profile for a single-pulse exposure.
 )EOL";
+    std::cout << po_opts << std::endl;
     return 0;
   }
 
@@ -90,10 +143,10 @@ combinations:
       format: h5
     output: 
       file_name: Tvst-1.txt
-      resolution: 
-        dt: 1 ms
-        t_min: 0 s
-        t_max: 2 s
+    discretization: 
+      dt: 1 ms
+      t_min: 0 s
+      t_max: 2 s
     terms:
       - time: 0.1 s
         scale: 1
@@ -137,40 +190,35 @@ combinations:
 
       for( auto combination : config["combinations"] )
       {
-        // yaml shenanigans to obtain relevant values from config files
-        auto output_field = combination["output"];
-        auto input_field = combination["input"];
-        auto disc_field = output_field["discretization"];
-        std::string input = input_field["file_name"].as<std::string>();
-        std::string input_format = input_field["format"].as<std::string>();
-        std::string output = output_field["file_name"].as<std::string>();
-        std::string output_format = output_field["format"].as<std::string>();
-        std::string disc_type = disc_field["type"].as<std::string>();
+        auto input = get<std::string>( combination, "input/file_name" );
+        auto input_format = get<std::string>(combination, "input/format" );
+        auto output = get<std::string>(combination, "output/file_name");
+        auto output_format = get<std::string>(combination, "output/format");
+        auto disc_type = get<std::string>(combination, "output/discretization/type");
+
         // discretization initializations
         //needs organization
         //as of rn all discretizers have a dt and t_min
-        int N;
+        quantity<t::s> dt = ureg.makeQuantity<double>( get<std::string>(combination, "output/discretization/dt") ).to<t::s>();
+        quantity<t::s> t_min = ureg.makeQuantity<double>( get<std::string>(combination, "output/discretization/t_min") ).to<t::s>();
+        quantity<t::s> t_max = ureg.makeQuantity<double>( get<std::string>(combination, "output/discretization/t_max") ).to<t::s>();
+
         Field<double, 1> T_output;
-        quantity<t::s> dt = ureg.makeQuantity<double>( disc_field["dt"].as<std::string>() ).to<t::s>();
-        quantity<t::s> t_min = ureg.makeQuantity<double>( disc_field["t_min"].as<std::string>() ).to<t::s>();
-        quantity<t::s> t_max = ureg.makeQuantity<double>( disc_field["t_max"].as<std::string>() ).to<t::s>();
-        double val_dt = dt.value();
-        double val_t_min = t_min.value();
-        double val_t_max = t_max.value();
+
         if (disc_type == "uniform"){
-          N = (int)((t_max.value() - t_min.value()) / dt.value());
+          int N = (int)((t_max.value() - t_min.value()) / dt.value());
           T_output = Field<double, 1>(N);
           T_output.setCoordinateSystem( Uniform<double>(t_min.value(), t_max.value()) );
         } else if (disc_type == "geometric") {
-          quantity<t::s> stretch = ureg.makeQuantity<double>( disc_field["stretch"].as<std::string>() ).to<t::s>();
+          quantity<t::s> stretch = ureg.makeQuantity<double>( combination["output"]["discretization"]["stretch"].as<std::string>() ).to<t::s>();
           double s = stretch.value();
-          N = (int) (log(1.0 - (( (val_t_max - val_t_min) * (1.0 - s)) / val_dt)) / log(s));
+          int N = (int) (log(1.0 - (( (t_max.value() - t_min.value()) * (1.0 - s)) / dt.value())) / log(s));
         } else if (disc_type == "geometric periodic") {
-          quantity<t::s> stretch = ureg.makeQuantity<double>( disc_field["stretch"].as<std::string>() ).to<t::s>();
-          quantity<t::s> period = ureg.makeQuantity<double>( disc_field["period"].as<std::string>() ).to<t::s>();
+          quantity<t::s> stretch = ureg.makeQuantity<double>( combination["output"]["discretization"]["stretch"].as<std::string>() ).to<t::s>();
+          quantity<t::s> period = ureg.makeQuantity<double>( combination["output"]["discretization"]["period"].as<std::string>() ).to<t::s>();
           double s = stretch.value();
           double T = period.value();
-          N = (int) (((val_t_max - val_t_min) / T) * log(1.0 - (( (T - val_t_min) * (1.0 - s)) / val_dt)) / log(s));
+          int N = (int) (((t_max.value() - t_min.value()) / T) * log(1.0 - (( (T - t_min.value()) * (1.0 - s)) / dt.value())) / log(s));
         } else {
           std::cout << "WARNING: No recognized type found in discretization. Nothing will be done." << std::endl;
           continue;
@@ -180,22 +228,19 @@ combinations:
 
         Field<double, 1> T_i;
 
-
-        if(!combination["terms"])
-        {
-          std::cout << "WARNING: No \"terms \" section found in combination. Nothing will be done." << std::endl;
-        }
-        //need to set coordinate system before building
         
         // reading Field from file
-        std::cout << "Reading from " << input;
+        std::cout << "Reading from " << input << std::endl;
         if("txt" == input_format ){
-          //no >> operator
-          //T_i << std::cin(input);
-          // insert way to read from file
-          std::cout << "no segfault!" << "\n";
-          //T_i << std::cin(input);
-          std::cout << "no segfault!" << "\n";
+          GP2DData data;
+          ReadGPASCII2DDataFile(input, data);
+
+          T_i.reset(data.x.size());
+          for(int i = 0; i < T_i.size(); ++i)
+          {
+            T_i.getAxis(0)[i] = data.x[i];
+            T_i(i) = data.f[i];
+          }
 
         } else if(input_format == std::string("h5")){
           hdf5read(input, T_i);
@@ -203,7 +248,17 @@ combinations:
           std::cout << "WARNING: No known input file format found in output. Nothing will be done." << std::endl;
           continue;
         }
+
+
+
+        auto T0 = T_i[0];
+        T_i -= T0;
+
         
+        if(!combination["terms"])
+        {
+          std::cout << "WARNING: No \"terms \" section found in combination. Nothing will be done." << std::endl;
+        }
         for( auto term : combination["terms"] )
         {
           // use UnitConvert library to allow users to specify quantities in any unit they want
@@ -213,11 +268,13 @@ combinations:
         }
 
         tempBuilder.build(T_output);
+        T_output += T0;
 
         // Writing generated Field data to file
         if(output_format == std::string("txt")){
           ofstream output_stream;
           output_stream.open(output);
+          output_stream << std::setprecision(10);
           output_stream << T_output;
           output_stream.close();
         } else if(output_format == std::string("h5")){
