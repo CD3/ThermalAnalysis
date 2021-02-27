@@ -224,13 +224,13 @@ combinations:
           continue;
         }
         
-        LinearCombination<_1D::CubicSplineInterpolator<double>> tempBuilder;
+        LinearCombination<_1D::MonotonicInterpolator<double>> tempBuilder;
 
         Field<double, 1> T_i;
 
         
         // reading Field from file
-        std::cout << "Reading from " << input << std::endl;
+        std::cout << "Reading from " << input << "...";
         if("txt" == input_format ){
           GP2DData data;
           ReadGPASCII2DDataFile(input, data);
@@ -248,6 +248,7 @@ combinations:
           std::cout << "WARNING: No known input file format found in output. Nothing will be done." << std::endl;
           continue;
         }
+        std::cout << "done" << std::endl;
 
 
 
@@ -271,6 +272,7 @@ combinations:
         T_output += T0;
 
         // Writing generated Field data to file
+        std::cout << "Writing to "<<output<<"...";
         if(output_format == std::string("txt")){
           ofstream output_stream;
           output_stream.open(output);
@@ -283,6 +285,7 @@ combinations:
           std::cout << "WARNING: No known output file format found in output. Nothing will be done." << std::endl;
           continue;
         }
+        std::cout << "done" << std::endl;
 
       }
 
